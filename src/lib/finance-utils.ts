@@ -10,6 +10,12 @@ import type {
   BudgetLineItem,
   IncomeSource,
 } from "./types";
+
+export interface CCCategorySpending {
+  category: string;
+  total: number;
+  count: number;
+}
 import { generateId } from "./utils";
 
 /**
@@ -237,6 +243,37 @@ export function calculateBudgetActuals(
     incomeTargets: updatedIncome,
     expenseLimits: updatedExpenses,
   };
+}
+
+/**
+ * Aggregate credit card transaction spending by category for a given month.
+ * Uses transaction date (not statement month) so Feb purchases go in Feb's budget.
+ */
+export function getCCSpendingByCategory(
+  creditCardStatements: CreditCardStatement[],
+  month: string
+): CCCategorySpending[] {
+  const monthStart = `${month}-01`;
+  const [y, m] = month.split("-").map(Number);
+  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+  const monthEnd = `${nextMonth}-01`;
+
+  const totals: Record<string, { total: number; count: number }> = {};
+
+  for (const statement of creditCardStatements) {
+    for (const tx of statement.transactions) {
+      if (tx.date >= monthStart && tx.date < monthEnd) {
+        const cat = tx.category || "other";
+        if (!totals[cat]) totals[cat] = { total: 0, count: 0 };
+        totals[cat].total += tx.amount;
+        totals[cat].count += 1;
+      }
+    }
+  }
+
+  return Object.entries(totals)
+    .map(([category, { total, count }]) => ({ category, total, count }))
+    .sort((a, b) => b.total - a.total);
 }
 
 /**

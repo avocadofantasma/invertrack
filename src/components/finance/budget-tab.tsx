@@ -12,6 +12,7 @@ import {
   Target,
   PiggyBank,
   Sparkles,
+  CreditCard,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -20,9 +21,11 @@ import {
   getMonthDisplayLabel,
   generateBudgetTemplate,
   calculateBudgetActuals,
+  getCCSpendingByCategory,
 } from "@/lib/finance-utils";
 import { toast } from "sonner";
 import type { MonthlyBudget, BudgetLineItem } from "@/lib/types";
+import type { CCCategorySpending } from "@/lib/finance-utils";
 
 export function BudgetTab() {
   const store = useStore();
@@ -67,9 +70,11 @@ export function BudgetTab() {
     .filter((p) => p.date.startsWith(monthPrefix))
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const creditCardPaymentsThisMonth = creditCardStatements
-    .filter((s) => s.month === selectedMonth && s.paid && s.paidAmount)
-    .reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+  const ccSpendingByCategory = useMemo(
+    () => getCCSpendingByCategory(creditCardStatements, selectedMonth),
+    [creditCardStatements, selectedMonth]
+  );
+  const totalCCSpending = ccSpendingByCategory.reduce((sum, c) => sum + c.total, 0);
 
   const totalBudgetedIncome = budget
     ? budget.incomeTargets.reduce((sum, t) => sum + t.budgeted, 0)
@@ -84,7 +89,7 @@ export function BudgetTab() {
     ? budget.expenseLimits.reduce((sum, t) => sum + t.actual, 0)
     : 0;
 
-  const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + creditCardPaymentsThisMonth;
+  const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + totalCCSpending;
   const netBalance = totalActualIncome - totalAllExpenses;
 
   return (
@@ -176,10 +181,10 @@ export function BudgetTab() {
                 className={`w-8 h-8 ${netBalance >= 0 ? "text-emerald-400" : "text-rose-400"}`}
               />
             </div>
-            {debtPaymentsThisMonth + creditCardPaymentsThisMonth > 0 && (
+            {debtPaymentsThisMonth + totalCCSpending > 0 && (
               <p className="text-xs text-surface-500 mt-2">
                 Incluye {formatMoney(debtPaymentsThisMonth)} en préstamos y{" "}
-                {formatMoney(creditCardPaymentsThisMonth)} en tarjetas
+                {formatMoney(totalCCSpending)} en tarjetas de crédito
               </p>
             )}
           </div>
@@ -230,6 +235,11 @@ export function BudgetTab() {
             }}
           />
 
+          {/* Credit card spending breakdown */}
+          {ccSpendingByCategory.length > 0 && (
+            <CCSpendingSection items={ccSpendingByCategory} />
+          )}
+
           {/* Delete budget */}
           <div className="flex justify-end">
             <button
@@ -277,6 +287,60 @@ function SummaryCard({
           {formatMoney(diff)} vs presupuesto
         </p>
       )}
+    </div>
+  );
+}
+
+const CC_CATEGORY_LABELS: Record<string, string> = {
+  food: "Comida",
+  health: "Salud",
+  shopping: "Compras",
+  entertainment: "Entretenimiento",
+  transport: "Transporte",
+  services: "Servicios",
+  other: "Otros",
+};
+
+function CCSpendingSection({ items }: { items: CCCategorySpending[] }) {
+  const total = items.reduce((sum, i) => sum + i.total, 0);
+  const max = items[0]?.total ?? 1;
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-surface-300/30 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-violet-400" />
+            <h3 className="section-title">Tarjetas de Crédito</h3>
+          </div>
+          <p className="text-xs text-surface-500 mt-0.5">
+            {formatMoney(total)} gastado este mes en {items.reduce((n, i) => n + i.count, 0)} transacciones
+          </p>
+        </div>
+      </div>
+      <div className="divide-y divide-surface-200/50">
+        {items.map((item) => {
+          const pct = (item.total / max) * 100;
+          const label = CC_CATEGORY_LABELS[item.category] ?? item.category;
+          return (
+            <div key={item.category} className="px-4 py-3 hover:bg-surface-200/30 transition-colors">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-surface-900">{label}</span>
+                  <span className="badge badge-info text-[10px]">{item.count} txn</span>
+                </div>
+                <span className="font-mono text-xs text-surface-600">{formatMoney(item.total)}</span>
+              </div>
+              <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-violet-400 transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
