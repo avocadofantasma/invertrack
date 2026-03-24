@@ -166,6 +166,11 @@ export interface CreditCardTransaction {
   description: string;
   amount: number;
   category?: string;
+  installment?: {
+    current: number;
+    total: number;
+    remainingBalance: number;
+  };
 }
 
 export interface CreditCardStatement {

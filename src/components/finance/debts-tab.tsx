@@ -351,6 +351,11 @@ function StatementCard({
               <div className="flex-1 min-w-0">
                 <span className="text-surface-700 truncate block">{txn.description}</span>
                 <span className="text-surface-500">{formatDate(txn.date)}</span>
+                {txn.installment && (
+                  <span className="text-amber-400 block">
+                    {txn.installment.current}/{txn.installment.total} · Restante: {formatMoney(txn.installment.remainingBalance)}
+                  </span>
+                )}
               </div>
               <span className="font-mono text-surface-900 ml-2">{formatMoney(txn.amount)}</span>
             </div>
@@ -737,8 +742,10 @@ function AIImportModal({
   onImport: (statement: Omit<CreditCardStatement, "id">) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [jsonPaste, setJsonPaste] = useState("");
   const [preview, setPreview] = useState<{
     statementDate: string;
     cutDate: string;
@@ -750,6 +757,7 @@ function AIImportModal({
       description: string;
       amount: number;
       category: string;
+      installment?: { current: number; total: number; remainingBalance: number };
     }>;
   } | null>(null);
 
@@ -790,6 +798,43 @@ function AIImportModal({
     }
   };
 
+  const handleJsonImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        // Accept either the raw parsed format or a wrapped { statement: ... } format
+        const payload = data.statement ?? data;
+        if (typeof payload.totalBalance !== "number") {
+          throw new Error("El JSON no tiene el formato esperado (falta totalBalance)");
+        }
+        setPreview(payload);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "JSON inválido");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  const handleJsonPaste = () => {
+    setError("");
+    try {
+      const data = JSON.parse(jsonPaste);
+      const payload = data.statement ?? data;
+      if (typeof payload.totalBalance !== "number") {
+        throw new Error("El JSON no tiene el formato esperado (falta totalBalance)");
+      }
+      setPreview(payload);
+      setJsonPaste("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "JSON inválido");
+    }
+  };
+
   const handleConfirm = () => {
     if (!preview) return;
 
@@ -803,6 +848,7 @@ function AIImportModal({
       description: t.description,
       amount: t.amount,
       category: t.category,
+      ...(t.installment ? { installment: t.installment } : {}),
     }));
 
     onImport({
@@ -842,36 +888,93 @@ function AIImportModal({
 
         {!preview ? (
           <div className="space-y-4">
-            <p className="text-sm text-surface-600">
-              Sube una foto o PDF de tu estado de cuenta. La IA extraerá automáticamente
-              el saldo, fecha de corte, pago mínimo y todas las transacciones.
-            </p>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading || !apiKey}
-              className="btn-primary w-full justify-center disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Procesando con IA...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />
-                  Subir archivo
-                </>
+            {/* AI import */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-widest text-surface-500">
+                Con IA
+              </p>
+              <p className="text-sm text-surface-600">
+                Sube una foto o PDF de tu estado de cuenta. La IA extraerá
+                el saldo, fecha de corte, pago mínimo y todas las transacciones.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || !apiKey}
+                className="btn-primary w-full justify-center disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Procesando con IA...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Subir imagen / PDF
+                  </>
+                )}
+              </button>
+              {!apiKey && (
+                <p className="text-xs text-amber-400">
+                  Configura tu API Key de OpenAI en Datos → Configuración.
+                </p>
               )}
-            </button>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-surface-300/40" />
+              <span className="text-xs text-surface-500">o</span>
+              <div className="flex-1 h-px bg-surface-300/40" />
+            </div>
+
+            {/* JSON import */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-widest text-surface-500">
+                Desde JSON
+              </p>
+              <p className="text-sm text-surface-600">
+                Importa un JSON generado con el skill{" "}
+                <code className="text-violet-400 text-xs">/parse-statement</code> de Claude Code.
+              </p>
+              <input
+                ref={jsonInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleJsonImport}
+              />
+              <button
+                onClick={() => jsonInputRef.current?.click()}
+                className="btn-secondary w-full justify-center"
+              >
+                <FileText className="w-4 h-4" />
+                Cargar archivo JSON
+              </button>
+              <textarea
+                value={jsonPaste}
+                onChange={(e) => setJsonPaste(e.target.value)}
+                placeholder="O pega el JSON aquí..."
+                rows={4}
+                className="input-field font-mono text-xs resize-none w-full"
+              />
+              {jsonPaste.trim() && (
+                <button
+                  onClick={handleJsonPaste}
+                  className="btn-secondary w-full justify-center"
+                >
+                  <Check className="w-4 h-4" />
+                  Usar JSON pegado
+                </button>
+              )}
+            </div>
 
             {error && (
               <p className="text-sm text-rose-400 bg-rose-500/10 rounded-xl p-3">{error}</p>
@@ -917,6 +1020,11 @@ function AIImportModal({
                       <div className="flex-1 min-w-0">
                         <p className="text-surface-700 truncate">{txn.description}</p>
                         <p className="text-surface-500">{txn.date} · {txn.category}</p>
+                        {txn.installment && (
+                          <p className="text-amber-400 mt-0.5">
+                            Cargo {txn.installment.current}/{txn.installment.total} · Saldo restante: {formatMoney(txn.installment.remainingBalance)}
+                          </p>
+                        )}
                       </div>
                       <span className="font-mono text-surface-900 ml-2">
                         {formatMoney(txn.amount)}

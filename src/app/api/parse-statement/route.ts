@@ -41,7 +41,12 @@ Return ONLY valid JSON with this exact structure (no markdown, no code blocks):
       "date": "YYYY-MM-DD",
       "description": "Store name or description",
       "amount": 123.45,
-      "category": "food|transport|entertainment|shopping|services|health|education|other"
+      "category": "food|transport|entertainment|shopping|services|health|education|other",
+      "installment": {
+        "current": 7,
+        "total": 12,
+        "remainingBalance": 9487.80
+      }
     }
   ]
 }
@@ -52,7 +57,12 @@ Rules:
 - If you cannot determine a field, use null
 - Extract ALL transactions visible in the statement
 - Categories should be one of: food, transport, entertainment, shopping, services, health, education, other
-- Currency is MXN (Mexican pesos)`;
+- Currency is MXN (Mexican pesos)
+- For installment payments (MSI / meses sin intereses / "cargo X de Y"), include the installment field with:
+  - current: the current installment number
+  - total: the total number of installments
+  - remainingBalance: the pending balance remaining after this payment (from the MSI summary section if available, otherwise calculate: amount * (total - current))
+- For non-installment transactions, omit the installment field entirely`;
 
     const content: Array<Record<string, unknown>> = [
       {
@@ -69,7 +79,7 @@ Rules:
         },
       });
     } else {
-      // For PDFs, send as file input
+      // For PDFs, use file content type
       content.push({
         type: "file",
         file: {
@@ -92,7 +102,6 @@ Rules:
           { role: "user", content },
         ],
         max_completion_tokens: 4096,
-        temperature: 0.1,
       }),
     });
 
@@ -107,18 +116,39 @@ Rules:
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content || "";
 
-    // Clean potential markdown wrapping
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    // Try multiple strategies to extract JSON
+    let parsed = null;
 
-    try {
-      const parsed = JSON.parse(cleaned);
-      return NextResponse.json(parsed);
-    } catch {
-      return NextResponse.json(
-        { error: "Failed to parse AI response as JSON", raw: text },
-        { status: 422 }
-      );
+    // Strategy 1: direct parse
+    try { parsed = JSON.parse(text.trim()); } catch {}
+
+    // Strategy 2: strip markdown code fences
+    if (!parsed) {
+      try {
+        const stripped = text.replace(/```(?:json)?\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(stripped);
+      } catch {}
     }
+
+    // Strategy 3: find first { ... last } in the text
+    if (!parsed) {
+      try {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        if (start !== -1 && end !== -1) {
+          parsed = JSON.parse(text.slice(start, end + 1));
+        }
+      } catch {}
+    }
+
+    if (parsed) {
+      return NextResponse.json(parsed);
+    }
+
+    return NextResponse.json(
+      { error: "No se pudo leer la respuesta de la IA. Intenta con una imagen más clara.", raw: text.slice(0, 500) },
+      { status: 422 }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
