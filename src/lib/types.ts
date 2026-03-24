@@ -225,6 +225,8 @@ export interface BudgetLineItem {
   actual: number;
   timesPerMonth: number; // how many payments expected per month
   timesPaid: number; // how many payments made this month
+  paidViaCC?: boolean; // covered by a credit card charge (may have different merchant name)
+  paidViaCCAmount?: number; // actual CC charge amount (defaults to budgeted if not set)
 }
 
 export interface MonthlyBudget {

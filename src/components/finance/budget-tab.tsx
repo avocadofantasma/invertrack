@@ -89,7 +89,15 @@ export function BudgetTab() {
     ? budget.expenseLimits.reduce((sum, t) => sum + t.actual, 0)
     : 0;
 
-  const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + totalCCSpending;
+  // Deduct CC-covered fixed expenses from CC total to avoid double-counting
+  const ccCoveredByFixed = budget
+    ? budget.expenseLimits
+        .filter((item) => item.paidViaCC)
+        .reduce((sum, item) => sum + (item.paidViaCCAmount ?? item.budgeted), 0)
+    : 0;
+  const netCCSpending = Math.max(totalCCSpending - ccCoveredByFixed, 0);
+
+  const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + netCCSpending;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -125,7 +133,7 @@ export function BudgetTab() {
             totalAllExpenses={totalAllExpenses}
             totalActualExpenses={totalActualExpenses}
             debtPaymentsThisMonth={debtPaymentsThisMonth}
-            totalCCSpending={totalCCSpending}
+            totalCCSpending={netCCSpending}
           />
 
           {/* Income breakdown */}
@@ -171,6 +179,22 @@ export function BudgetTab() {
               store.updateMonthlyBudget(budget.id, {
                 expenseLimits: budget.expenseLimits.filter((t) => t.id !== itemId),
               });
+            }}
+            onMarkCCPaid={(itemId, amount) => {
+              const updatedLimits = budget.expenseLimits.map((t) =>
+                t.id === itemId
+                  ? { ...t, paidViaCC: true, paidViaCCAmount: amount }
+                  : t
+              );
+              store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
+            }}
+            onUnmarkCCPaid={(itemId) => {
+              const updatedLimits = budget.expenseLimits.map((t) =>
+                t.id === itemId
+                  ? { ...t, paidViaCC: false, paidViaCCAmount: undefined }
+                  : t
+              );
+              store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
             }}
           />
 
@@ -548,6 +572,8 @@ function BudgetSection({
   onUpdateItem,
   onAddItem,
   onDeleteItem,
+  onMarkCCPaid,
+  onUnmarkCCPaid,
 }: {
   title: string;
   items: BudgetLineItem[];
@@ -555,11 +581,15 @@ function BudgetSection({
   onUpdateItem: (id: string, updates: Partial<BudgetLineItem>) => void;
   onAddItem: (item: BudgetLineItem) => void;
   onDeleteItem: (id: string) => void;
+  onMarkCCPaid?: (id: string, amount: number) => void;
+  onUnmarkCCPaid?: (id: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBudgeted, setNewBudgeted] = useState("");
   const [newCategory] = useState(type === "income" ? "salary" : "personal");
+  const [ccInputFor, setCCInputFor] = useState<string | null>(null);
+  const [ccInputAmount, setCCInputAmount] = useState("");
 
   const totalBudgeted = items.reduce((sum, i) => sum + i.budgeted, 0);
   const totalActual = items.reduce((sum, i) => sum + i.actual, 0);
@@ -633,18 +663,25 @@ function BudgetSection({
           const barColor =
             type === "income"
               ? "bg-cyan-400"
-              : isOver
-                ? "bg-rose-400"
-                : "bg-amber-400";
+              : item.paidViaCC
+                ? "bg-violet-400"
+                : isOver
+                  ? "bg-rose-400"
+                  : "bg-amber-400";
 
           return (
             <div key={item.id} className="px-4 py-3 hover:bg-surface-200/30 transition-colors">
               <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-surface-900">{item.name}</span>
-                  {times > 1 && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium text-surface-900 truncate">{item.name}</span>
+                  {item.paidViaCC && (
+                    <span className="badge text-[10px] bg-violet-500/20 text-violet-300 border-violet-500/30 shrink-0">
+                      TDC
+                    </span>
+                  )}
+                  {!item.paidViaCC && times > 1 && (
                     <span
-                      className={`badge text-[10px] ${
+                      className={`badge text-[10px] shrink-0 ${
                         paid >= times ? "badge-ok" : paid > 0 ? "badge-warning" : "badge-info"
                       }`}
                     >
@@ -652,11 +689,32 @@ function BudgetSection({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-surface-500">{item.category}</span>
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="font-mono text-xs text-surface-600">
                     {formatMoney(item.actual)} / {formatMoney(item.budgeted)}
                   </span>
+                  {type === "expense" && onMarkCCPaid && onUnmarkCCPaid && (
+                    item.paidViaCC ? (
+                      <button
+                        onClick={() => onUnmarkCCPaid(item.id)}
+                        className="p-1 rounded hover:bg-violet-500/10"
+                        title="Quitar pago con TDC"
+                      >
+                        <CreditCard className="w-3 h-3 text-violet-400" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCCInputFor(item.id);
+                          setCCInputAmount(String(item.budgeted));
+                        }}
+                        className="p-1 rounded hover:bg-violet-500/10"
+                        title="Marcar como pagado con TDC"
+                      >
+                        <CreditCard className="w-3 h-3 text-surface-500 hover:text-violet-400 transition-colors" />
+                      </button>
+                    )
+                  )}
                   <button
                     onClick={() => onDeleteItem(item.id)}
                     className="p-1 rounded hover:bg-rose-500/10"
@@ -665,13 +723,48 @@ function BudgetSection({
                   </button>
                 </div>
               </div>
+
+              {/* CC amount input inline */}
+              {ccInputFor === item.id && (
+                <div className="mb-2 flex items-center gap-2 bg-violet-500/10 rounded-lg px-3 py-2">
+                  <CreditCard className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                  <span className="text-xs text-violet-300 shrink-0">Monto en TDC</span>
+                  <input
+                    type="number"
+                    value={ccInputAmount}
+                    onChange={(e) => setCCInputAmount(e.target.value)}
+                    className="input-field py-1 text-xs w-28"
+                    min="0"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      const amount = parseFloat(ccInputAmount);
+                      if (!isNaN(amount) && amount > 0) {
+                        onMarkCCPaid?.(item.id, amount);
+                        setCCInputFor(null);
+                      }
+                    }}
+                    className="btn-primary py-1 px-2 text-xs"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => setCCInputFor(null)}
+                    className="p-1 hover:text-surface-300 text-surface-500"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
               <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${barColor} transition-all`}
                   style={{ width: `${Math.min(pct, 100)}%` }}
                 />
               </div>
-              {isOver && type === "expense" && (
+              {isOver && type === "expense" && !item.paidViaCC && (
                 <p className="text-[10px] text-rose-400 mt-0.5">
                   Excedido por {formatMoney(item.actual - item.budgeted)}
                 </p>

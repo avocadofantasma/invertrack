@@ -228,6 +228,15 @@ export function calculateBudgetActuals(
 
   // Match expense entries to budget items by name (exact match on description)
   const updatedExpenses = budget.expenseLimits.map((limit) => {
+    // If marked as paid via CC, use the CC amount directly
+    if (limit.paidViaCC) {
+      return {
+        ...limit,
+        actual: limit.paidViaCCAmount ?? limit.budgeted,
+        timesPaid: 1,
+        timesPerMonth: limit.timesPerMonth || 1,
+      };
+    }
     const matched = monthExpenses.filter((e) => e.description === limit.name);
     const actual = matched.reduce((sum, e) => sum + e.amount, 0);
     const timesPaid = matched.length;
