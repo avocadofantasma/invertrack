@@ -10,14 +10,14 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Plus,
-  Download,
-  Upload,
-  RotateCcw,
   Settings,
   BarChart3,
   List,
   Calculator,
-  RefreshCw,
+  CreditCard,
+  DollarSign,
+  Receipt,
+  PieChart,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import {
@@ -33,9 +33,23 @@ import { AddMovementModal } from "./add-movement-modal";
 import { ProjectionsChart } from "./projections-chart";
 import { WhatIfSimulator } from "./what-if-simulator";
 import { DataManager } from "./data-manager";
+import { RemindersBanner } from "./finance/reminders-banner";
+import { BudgetTab } from "./finance/budget-tab";
+import { IncomeTab } from "./finance/income-tab";
+import { ExpensesTab } from "./finance/expenses-tab";
+import { DebtsTab } from "./finance/debts-tab";
 import { toast } from "sonner";
 
-type Tab = "overview" | "movements" | "projections" | "whatif" | "settings";
+type Tab =
+  | "overview"
+  | "movements"
+  | "projections"
+  | "whatif"
+  | "budget"
+  | "income"
+  | "expenses"
+  | "debts"
+  | "settings";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -90,11 +104,15 @@ export function Dashboard() {
   const proj6Total = projections[6]?.total ?? totalBalance;
   const proj12Total = projections[12]?.total ?? totalBalance;
 
-  const tabs: { id: Tab; label: string; icon: typeof TrendingUp }[] = [
-    { id: "overview", label: "Resumen", icon: BarChart3 },
-    { id: "movements", label: "Movimientos", icon: List },
-    { id: "projections", label: "Proyecciones", icon: TrendingUp },
-    { id: "whatif", label: "¿Qué pasaría si...?", icon: Calculator },
+  const tabs: { id: Tab; label: string; icon: typeof TrendingUp; group?: string }[] = [
+    { id: "overview", label: "Resumen", icon: BarChart3, group: "inversiones" },
+    { id: "movements", label: "Movimientos", icon: List, group: "inversiones" },
+    { id: "projections", label: "Proyecciones", icon: TrendingUp, group: "inversiones" },
+    { id: "whatif", label: "¿Qué pasaría si...?", icon: Calculator, group: "inversiones" },
+    { id: "budget", label: "Presupuesto", icon: PieChart, group: "finanzas" },
+    { id: "income", label: "Ingresos", icon: DollarSign, group: "finanzas" },
+    { id: "expenses", label: "Gastos", icon: Receipt, group: "finanzas" },
+    { id: "debts", label: "Deudas", icon: CreditCard, group: "finanzas" },
     { id: "settings", label: "Datos", icon: Settings },
   ];
 
@@ -124,26 +142,41 @@ export function Dashboard() {
 
           {/* Tabs */}
           <div className="flex gap-1 -mb-px overflow-x-auto scrollbar-thin pb-px">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-200",
-                  activeTab === id
-                    ? "border-brand-500 text-brand-400"
-                    : "border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-400"
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
-            ))}
+            {tabs.map(({ id, label, icon: Icon, group }, i) => {
+              // Add separator between groups
+              const prevGroup = i > 0 ? tabs[i - 1].group : undefined;
+              const showSeparator = prevGroup && group && prevGroup !== group;
+
+              return (
+                <div key={id} className="flex items-center">
+                  {showSeparator && (
+                    <div className="w-px h-5 bg-surface-300/50 mx-1" />
+                  )}
+                  <button
+                    onClick={() => setActiveTab(id)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-200",
+                      activeTab === id
+                        ? "border-brand-500 text-brand-400"
+                        : "border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-400"
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden sm:inline">{label}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Reminders banner - show on all finance tabs */}
+        {["overview", "budget", "income", "expenses", "debts"].includes(activeTab) && (
+          <RemindersBanner />
+        )}
+
         {activeTab === "overview" && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -290,6 +323,10 @@ export function Dashboard() {
           />
         )}
 
+        {activeTab === "budget" && <BudgetTab />}
+        {activeTab === "income" && <IncomeTab />}
+        {activeTab === "expenses" && <ExpensesTab />}
+        {activeTab === "debts" && <DebtsTab />}
         {activeTab === "settings" && <DataManager />}
       </main>
 

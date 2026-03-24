@@ -3,9 +3,9 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Invertrack — Control de Inversiones",
+  title: "Invertrack — Finanzas Personales",
   description:
-    "Lleva el control de tus inversiones en SOFIPOs, bancos y casas de bolsa en México",
+    "Control de inversiones, presupuesto, ingresos, gastos, tarjetas de crédito y préstamos",
 };
 
 export default function RootLayout({

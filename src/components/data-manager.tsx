@@ -11,6 +11,9 @@ import {
   FileJson,
   Database,
   Shield,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -19,6 +22,11 @@ export function DataManager() {
   const store = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showReset, setShowReset] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(store.financeSettings.openaiApiKey);
+  const [reminderDays, setReminderDays] = useState(
+    store.financeSettings.reminderDaysBefore.toString()
+  );
 
   const handleExport = () => {
     const json = store.exportData();
@@ -57,11 +65,26 @@ export function DataManager() {
     setTimeout(() => window.location.reload(), 1000);
   };
 
+  const handleSaveSettings = () => {
+    store.updateFinanceSettings({
+      openaiApiKey: apiKeyInput,
+      reminderDaysBefore: parseInt(reminderDays) || 7,
+    });
+    toast.success("Configuración guardada");
+  };
+
   const stats = {
     accounts: store.accounts.length,
     movements: store.movements.length,
-    initialBalances: store.initialBalances.length,
-    contributions: store.monthlyContributions.length,
+    incomeSources: store.incomeSources.length,
+    incomeEntries: store.incomeEntries.length,
+    fixedExpenses: store.fixedExpenses.length,
+    expenseEntries: store.expenseEntries.length,
+    creditCards: store.creditCards.length,
+    statements: store.creditCardStatements.length,
+    loans: store.loans.length,
+    loanPayments: store.loanPayments.length,
+    budgets: store.monthlyBudgets.length,
   };
 
   return (
@@ -86,12 +109,19 @@ export function DataManager() {
             Estado actual
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
           {[
-            { label: "Cuentas", value: stats.accounts },
+            { label: "Cuentas inversión", value: stats.accounts },
             { label: "Movimientos", value: stats.movements },
-            { label: "Saldos iniciales", value: stats.initialBalances },
-            { label: "Abonos config.", value: stats.contributions },
+            { label: "Fuentes ingreso", value: stats.incomeSources },
+            { label: "Ingresos", value: stats.incomeEntries },
+            { label: "Gastos fijos", value: stats.fixedExpenses },
+            { label: "Gastos registrados", value: stats.expenseEntries },
+            { label: "Tarjetas", value: stats.creditCards },
+            { label: "Estados de cuenta", value: stats.statements },
+            { label: "Préstamos", value: stats.loans },
+            { label: "Pagos préstamo", value: stats.loanPayments },
+            { label: "Presupuestos", value: stats.budgets },
           ].map(({ label, value }) => (
             <div key={label}>
               <p className="text-2xl font-mono font-semibold text-surface-950">
@@ -100,6 +130,59 @@ export function DataManager() {
               <p className="text-xs text-surface-500">{label}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Finance Settings */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Key className="w-4 h-4 text-violet-400" />
+          <span className="text-sm font-medium text-surface-800">
+            Configuración de finanzas
+          </span>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">
+              OpenAI API Key (para importar estados de cuenta con IA)
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  className="input-field pr-10"
+                  placeholder="sk-..."
+                />
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-500 hover:text-surface-700"
+                >
+                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">
+              Días de anticipación para recordatorios
+            </label>
+            <input
+              type="number"
+              value={reminderDays}
+              onChange={(e) => setReminderDays(e.target.value)}
+              className="input-field w-32"
+              min="1"
+              max="30"
+            />
+          </div>
+
+          <button onClick={handleSaveSettings} className="btn-primary text-sm">
+            <Check className="w-4 h-4" />
+            Guardar configuración
+          </button>
         </div>
       </div>
 
@@ -114,8 +197,8 @@ export function DataManager() {
               Exportar backup
             </h4>
             <p className="text-xs text-surface-500 mt-1 mb-3">
-              Descarga un archivo JSON con todos tus datos. Guárdalo en un lugar
-              seguro.
+              Descarga un archivo JSON con todos tus datos (inversiones + finanzas).
+              Guárdalo para mover tus datos entre computadoras.
             </p>
             <button onClick={handleExport} className="btn-primary text-sm">
               <FileJson className="w-4 h-4" />
@@ -208,9 +291,10 @@ export function DataManager() {
         <Shield className="w-4 h-4 text-surface-500 mt-0.5 shrink-0" />
         <p className="text-xs text-surface-500 leading-relaxed">
           Todos tus datos se almacenan localmente en tu navegador (localStorage).
-          Nada se envía a ningún servidor. Los únicos datos que salen de tu
-          navegador son las consultas a APIs de mercado (CoinGecko, Yahoo
-          Finance) para obtener precios en tiempo real.
+          Nada se envía a ningún servidor excepto: consultas a APIs de mercado
+          (CoinGecko, Yahoo Finance) para precios, y opcionalmente tu estado de
+          cuenta a OpenAI cuando usas la importación con IA. Tu API Key nunca
+          sale de tu máquina local.
         </p>
       </div>
     </motion.div>

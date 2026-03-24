@@ -13,7 +13,7 @@ import {
   Building2,
   Sparkles,
 } from "lucide-react";
-import { useStore, initializeDefaultAccounts } from "@/lib/store";
+import { useStore, initializeDefaultAccounts, type Store } from "@/lib/store";
 import { DEFAULT_ACCOUNTS, type Account, type LimitType } from "@/lib/types";
 import { formatMoney, formatPercent, generateId, toISODate } from "@/lib/utils";
 
@@ -104,7 +104,7 @@ function StepWrapper({
   );
 }
 
-function WelcomeStep({ onNext, store }: { onNext: () => void; store: ReturnType<typeof useStore> }) {
+function WelcomeStep({ onNext, store }: { onNext: () => void; store: Store }) {
   return (
     <StepWrapper className="text-center">
       <motion.div
@@ -168,7 +168,7 @@ function AccountsStep({
 }: {
   onNext: () => void;
   onPrev: () => void;
-  store: ReturnType<typeof useStore>;
+  store: Store;
 }) {
   const accounts = store.accounts;
 
@@ -239,7 +239,7 @@ function AccountsStep({
   );
 }
 
-function QuickAddAccount({ store }: { store: ReturnType<typeof useStore> }) {
+function QuickAddAccount({ store }: { store: Store }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     institution: "",
@@ -399,7 +399,7 @@ function BalancesStep({
 }: {
   onNext: () => void;
   onPrev: () => void;
-  store: ReturnType<typeof useStore>;
+  store: Store;
 }) {
   const accounts = store.accounts;
   const [balances, setBalances] = useState<
@@ -508,7 +508,7 @@ function BalancesStep({
   );
 }
 
-function DoneStep({ store }: { store: ReturnType<typeof useStore> }) {
+function DoneStep({ store }: { store: Store }) {
   return (
     <StepWrapper className="text-center">
       <motion.div

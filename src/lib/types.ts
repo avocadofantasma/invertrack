@@ -102,13 +102,175 @@ export interface MarketData {
   lastUpdated: string;
 }
 
+// ── Finance Types ──────────────────────────────────────────────
+
+export type IncomeCategory = "salary" | "business" | "bonus" | "sale" | "other";
+export type ExpenseCategory = "personal" | "business";
+
+export interface IncomeSource {
+  id: string;
+  name: string;
+  type: IncomeCategory;
+  amount: number;
+  frequency: "monthly" | "biweekly" | "one-time";
+  dayOfMonth?: number;
+  timesPerMonth: number; // 1 = monthly, 2 = biweekly/quincenal
+  notes: string;
+  enabled: boolean;
+}
+
+export interface IncomeEntry {
+  id: string;
+  sourceId?: string;
+  date: string;
+  amount: number;
+  category: IncomeCategory;
+  description: string;
+}
+
+export interface FixedExpense {
+  id: string;
+  name: string;
+  category: ExpenseCategory;
+  expectedAmount: number;
+  dueDay?: number;
+  timesPerMonth: number; // 1 = once, 2 = twice (quincenal)
+  notes: string;
+  enabled: boolean;
+}
+
+export interface ExpenseEntry {
+  id: string;
+  fixedExpenseId?: string;
+  date: string;
+  amount: number;
+  category: string;
+  description: string;
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  bank: string;
+  creditLimit: number;
+  cutDay: number;
+  paymentDueDay: number;
+  color: string;
+  notes: string;
+  enabled: boolean;
+}
+
+export interface CreditCardTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category?: string;
+}
+
+export interface CreditCardStatement {
+  id: string;
+  cardId: string;
+  month: string; // YYYY-MM
+  totalBalance: number;
+  minimumPayment: number;
+  cutDate: string;
+  dueDate: string;
+  transactions: CreditCardTransaction[];
+  paid: boolean;
+  paidAmount?: number;
+  paidDate?: string;
+}
+
+export interface Loan {
+  id: string;
+  name: string;
+  institution: string;
+  type: "car" | "personal" | "other";
+  totalAmount: number;
+  remainingBalance: number;
+  monthlyPayment: number;
+  interestRate: number;
+  paymentDueDay: number;
+  startDate: string;
+  endDate?: string;
+  totalInstallments: number;
+  paidInstallments: number;
+  color: string;
+  notes: string;
+  enabled: boolean;
+}
+
+export interface LoanPayment {
+  id: string;
+  loanId: string;
+  date: string;
+  amount: number;
+  principal: number;
+  interest: number;
+  remainingAfter: number;
+  notes: string;
+}
+
+export interface BudgetLineItem {
+  id: string;
+  name: string;
+  category: string;
+  budgeted: number;
+  actual: number;
+  timesPerMonth: number; // how many payments expected per month
+  timesPaid: number; // how many payments made this month
+}
+
+export interface MonthlyBudget {
+  id: string;
+  month: string; // YYYY-MM
+  incomeTargets: BudgetLineItem[];
+  expenseLimits: BudgetLineItem[];
+  notes: string;
+}
+
+export interface FinanceSettings {
+  openaiApiKey: string;
+  reminderDaysBefore: number;
+}
+
+// ── Reminders ──────────────────────────────────────────────────
+
+export type ReminderType = "credit_card_cut" | "credit_card_due" | "loan_due" | "expense_due";
+
+export interface Reminder {
+  id: string;
+  type: ReminderType;
+  title: string;
+  description: string;
+  dueDate: string;
+  sourceId: string;
+  dismissed: boolean;
+}
+
+// ── App State ──────────────────────────────────────────────────
+
 export interface AppState {
+  // Investment tracker
   accounts: Account[];
   movements: Movement[];
   initialBalances: InitialBalance[];
   monthlyContributions: MonthlyContribution[];
   marketData: Record<string, MarketData>;
   setupComplete: boolean;
+  // Finance tracker
+  incomeSources: IncomeSource[];
+  incomeEntries: IncomeEntry[];
+  fixedExpenses: FixedExpense[];
+  expenseEntries: ExpenseEntry[];
+  creditCards: CreditCard[];
+  creditCardStatements: CreditCardStatement[];
+  loans: Loan[];
+  loanPayments: LoanPayment[];
+  monthlyBudgets: MonthlyBudget[];
+  financeSettings: FinanceSettings;
+  dismissedReminders: string[]; // reminder IDs
 }
 
 // Default accounts for Mexican market
