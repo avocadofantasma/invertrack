@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
@@ -41,6 +41,15 @@ export function BudgetTab() {
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
 
+  // Auto-generate budget for any month that doesn't have one yet
+  useEffect(() => {
+    const exists = monthlyBudgets.some((b) => b.month === selectedMonth);
+    if (!exists) {
+      const template = generateBudgetTemplate(selectedMonth, incomeSources, fixedExpenses);
+      store.addMonthlyBudget(template);
+    }
+  }, [selectedMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const budget = useMemo(() => {
     const existing = monthlyBudgets.find((b) => b.month === selectedMonth);
     if (existing) {
@@ -48,12 +57,6 @@ export function BudgetTab() {
     }
     return null;
   }, [monthlyBudgets, selectedMonth, incomeEntries, expenseEntries]);
-
-  const handleCreateBudget = () => {
-    const template = generateBudgetTemplate(selectedMonth, incomeSources, fixedExpenses);
-    store.addMonthlyBudget(template);
-    toast.success("Presupuesto generado");
-  };
 
   const navigateMonth = (direction: number) => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -109,20 +112,8 @@ export function BudgetTab() {
       </div>
 
       {!budget ? (
-        <div className="glass-card p-8 text-center space-y-4">
-          <Target className="w-12 h-12 text-surface-400 mx-auto" />
-          <div>
-            <p className="text-surface-700 font-medium">
-              No hay presupuesto para {getMonthDisplayLabel(selectedMonth)}
-            </p>
-            <p className="text-sm text-surface-500 mt-1">
-              Genera uno automáticamente desde tus fuentes de ingreso y gastos fijos configurados.
-            </p>
-          </div>
-          <button onClick={handleCreateBudget} className="btn-primary">
-            <Sparkles className="w-4 h-4" />
-            Generar presupuesto
-          </button>
+        <div className="glass-card p-8 text-center">
+          <Sparkles className="w-8 h-8 text-surface-400 mx-auto animate-pulse" />
         </div>
       ) : (
         <>
@@ -272,7 +263,8 @@ function BudgetOverview({
   totalCCSpending: number;
 }) {
   const balance = totalActualIncome - totalAllExpenses;
-  const expensePct = totalActualIncome > 0 ? totalAllExpenses / totalActualIncome : 0;
+  // Compare expenses vs total expected income (end-of-month view)
+  const expensePct = totalBudgetedIncome > 0 ? totalAllExpenses / totalBudgetedIncome : 0;
   const expenseColor =
     expensePct >= 1 ? "#f87171" : expensePct >= 0.8 ? "#fb923c" : "#fbbf24";
 
@@ -330,15 +322,15 @@ function BudgetOverview({
         <div className="flex flex-col items-center gap-1">
           <DonutGauge
             value={totalAllExpenses}
-            max={totalActualIncome}
+            max={totalBudgetedIncome}
             color={expenseColor}
-            label="Del ingreso gastado"
+            label="Del ingreso total gastado"
           />
           <p className="font-mono text-sm font-semibold text-surface-900">
             {formatMoney(totalAllExpenses)}
           </p>
           <p className="text-[11px] text-surface-500">
-            presupuesto {formatMoney(totalBudgetedExpenses)}
+            de {formatMoney(totalBudgetedIncome)} esperado
           </p>
         </div>
       </div>
