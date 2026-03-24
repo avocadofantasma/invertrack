@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
   Plus,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  TrendingDown,
   Target,
-  PiggyBank,
   Sparkles,
   CreditCard,
+  X,
+  ChevronRight as ChevronRightSm,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -37,7 +37,6 @@ export function BudgetTab() {
     expenseEntries,
     creditCardStatements,
     loanPayments,
-    loans,
   } = store;
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
@@ -64,10 +63,8 @@ export function BudgetTab() {
     );
   };
 
-  // Calculate totals including debts for the month
-  const monthPrefix = selectedMonth;
   const debtPaymentsThisMonth = loanPayments
-    .filter((p) => p.date.startsWith(monthPrefix))
+    .filter((p) => p.date.startsWith(selectedMonth))
     .reduce((sum, p) => sum + p.amount, 0);
 
   const ccSpendingByCategory = useMemo(
@@ -90,7 +87,6 @@ export function BudgetTab() {
     : 0;
 
   const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + totalCCSpending;
-  const netBalance = totalActualIncome - totalAllExpenses;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -130,64 +126,16 @@ export function BudgetTab() {
         </div>
       ) : (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryCard
-              label="Ingreso presupuestado"
-              value={formatMoney(totalBudgetedIncome)}
-              icon={Target}
-              gradient="from-emerald-500/10 to-cyan-500/5"
-              iconColor="text-emerald-400"
-            />
-            <SummaryCard
-              label="Ingreso real"
-              value={formatMoney(totalActualIncome)}
-              icon={TrendingUp}
-              gradient="from-cyan-500/10 to-violet-500/5"
-              iconColor="text-cyan-400"
-              diff={totalActualIncome - totalBudgetedIncome}
-            />
-            <SummaryCard
-              label="Gastos presupuestados"
-              value={formatMoney(totalBudgetedExpenses)}
-              icon={Target}
-              gradient="from-rose-500/10 to-orange-500/5"
-              iconColor="text-rose-400"
-            />
-            <SummaryCard
-              label="Gastos reales"
-              value={formatMoney(totalAllExpenses)}
-              icon={TrendingDown}
-              gradient="from-amber-500/10 to-rose-500/5"
-              iconColor="text-amber-400"
-              diff={-(totalAllExpenses - totalBudgetedExpenses)}
-            />
-          </div>
-
-          {/* Net balance */}
-          <div
-            className={`glass-card p-5 bg-gradient-to-br ${
-              netBalance >= 0
-                ? "from-emerald-500/10 to-brand-500/5"
-                : "from-rose-500/10 to-amber-500/5"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="stat-label">Balance neto del mes</p>
-                <p className="stat-value text-surface-950 mt-2">{formatMoney(netBalance)}</p>
-              </div>
-              <PiggyBank
-                className={`w-8 h-8 ${netBalance >= 0 ? "text-emerald-400" : "text-rose-400"}`}
-              />
-            </div>
-            {debtPaymentsThisMonth + totalCCSpending > 0 && (
-              <p className="text-xs text-surface-500 mt-2">
-                Incluye {formatMoney(debtPaymentsThisMonth)} en préstamos y{" "}
-                {formatMoney(totalCCSpending)} en tarjetas de crédito
-              </p>
-            )}
-          </div>
+          {/* Overview */}
+          <BudgetOverview
+            totalBudgetedIncome={totalBudgetedIncome}
+            totalActualIncome={totalActualIncome}
+            totalBudgetedExpenses={totalBudgetedExpenses}
+            totalAllExpenses={totalAllExpenses}
+            totalActualExpenses={totalActualExpenses}
+            debtPaymentsThisMonth={debtPaymentsThisMonth}
+            totalCCSpending={totalCCSpending}
+          />
 
           {/* Income breakdown */}
           <BudgetSection
@@ -214,7 +162,7 @@ export function BudgetTab() {
 
           {/* Expense breakdown */}
           <BudgetSection
-            title="Gastos"
+            title="Gastos fijos"
             items={budget.expenseLimits}
             type="expense"
             onUpdateItem={(itemId, updates) => {
@@ -259,37 +207,201 @@ export function BudgetTab() {
   );
 }
 
-function SummaryCard({
-  label,
+// ─── Overview ────────────────────────────────────────────────────────────────
+
+function DonutGauge({
   value,
-  icon: Icon,
-  gradient,
-  iconColor,
-  diff,
+  max,
+  color,
+  label,
 }: {
+  value: number;
+  max: number;
+  color: string;
   label: string;
-  value: string;
-  icon: typeof Target;
-  gradient: string;
-  iconColor: string;
-  diff?: number;
 }) {
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const data = [{ v: pct }, { v: 1 - pct }];
   return (
-    <div className={`glass-card p-4 bg-gradient-to-br ${gradient}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="stat-label text-[10px]">{label}</span>
-        <Icon className={`w-4 h-4 ${iconColor}`} />
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="relative w-28 h-28">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={38}
+              outerRadius={52}
+              startAngle={90}
+              endAngle={-270}
+              dataKey="v"
+              strokeWidth={0}
+            >
+              <Cell fill={color} />
+              <Cell fill="rgba(255,255,255,0.06)" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-sm font-bold" style={{ color }}>
+            {Math.round(pct * 100)}%
+          </span>
+        </div>
       </div>
-      <p className="font-mono text-lg font-semibold text-surface-950">{value}</p>
-      {diff !== undefined && diff !== 0 && (
-        <p className={`text-xs mt-1 font-mono ${diff >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-          {diff >= 0 ? "+" : ""}
-          {formatMoney(diff)} vs presupuesto
-        </p>
+      <p className="text-[11px] font-medium text-surface-600 text-center">{label}</p>
+    </div>
+  );
+}
+
+function BudgetOverview({
+  totalBudgetedIncome,
+  totalActualIncome,
+  totalBudgetedExpenses,
+  totalAllExpenses,
+  totalActualExpenses,
+  debtPaymentsThisMonth,
+  totalCCSpending,
+}: {
+  totalBudgetedIncome: number;
+  totalActualIncome: number;
+  totalBudgetedExpenses: number;
+  totalAllExpenses: number;
+  totalActualExpenses: number;
+  debtPaymentsThisMonth: number;
+  totalCCSpending: number;
+}) {
+  const balance = totalActualIncome - totalAllExpenses;
+  const expensePct = totalActualIncome > 0 ? totalAllExpenses / totalActualIncome : 0;
+  const expenseColor =
+    expensePct >= 1 ? "#f87171" : expensePct >= 0.8 ? "#fb923c" : "#fbbf24";
+
+  const pendingIncome = totalBudgetedIncome - totalActualIncome;
+
+  // Stacked bar
+  const barTotal = totalAllExpenses || 1;
+  const fixedPct = (totalActualExpenses / barTotal) * 100;
+  const loanPct = (debtPaymentsThisMonth / barTotal) * 100;
+  const ccPct = (totalCCSpending / barTotal) * 100;
+
+  return (
+    <div className="glass-card p-5 space-y-5">
+      <div className="grid grid-cols-3 gap-2 items-center">
+        {/* Income gauge */}
+        <div className="flex flex-col items-center gap-1">
+          <DonutGauge
+            value={totalActualIncome}
+            max={totalBudgetedIncome}
+            color="#34d399"
+            label="Ingreso cobrado"
+          />
+          <p className="font-mono text-sm font-semibold text-surface-900">
+            {formatMoney(totalActualIncome)}
+          </p>
+          <p className="text-[11px] text-surface-500">de {formatMoney(totalBudgetedIncome)}</p>
+        </div>
+
+        {/* Balance center */}
+        <div className="flex flex-col items-center gap-1.5 text-center px-2">
+          <p className="text-[9px] uppercase tracking-widest text-surface-500 font-medium">
+            Balance disponible
+          </p>
+          <p
+            className={`font-mono text-2xl font-bold leading-none ${
+              balance >= 0 ? "text-emerald-400" : "text-rose-400"
+            }`}
+          >
+            {formatMoney(balance)}
+          </p>
+          <p className="text-[10px] text-surface-500">ingresos − gastos</p>
+          {pendingIncome > 0 && (
+            <div className="mt-1 rounded-lg bg-surface-200/40 px-2.5 py-1.5 w-full">
+              <p className="text-[9px] uppercase tracking-wider text-surface-500">
+                Pendiente cobrar
+              </p>
+              <p className="font-mono text-xs font-semibold text-cyan-400">
+                +{formatMoney(pendingIncome)}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Expense gauge */}
+        <div className="flex flex-col items-center gap-1">
+          <DonutGauge
+            value={totalAllExpenses}
+            max={totalActualIncome}
+            color={expenseColor}
+            label="Del ingreso gastado"
+          />
+          <p className="font-mono text-sm font-semibold text-surface-900">
+            {formatMoney(totalAllExpenses)}
+          </p>
+          <p className="text-[11px] text-surface-500">
+            presupuesto {formatMoney(totalBudgetedExpenses)}
+          </p>
+        </div>
+      </div>
+
+      {/* Expense composition bar */}
+      {totalAllExpenses > 0 && (
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-surface-500 mb-2">
+            Composición de gastos
+          </p>
+          <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
+            {totalActualExpenses > 0 && (
+              <div
+                className="bg-amber-400"
+                style={{ width: `${fixedPct}%` }}
+              />
+            )}
+            {debtPaymentsThisMonth > 0 && (
+              <div
+                className="bg-rose-400"
+                style={{ width: `${loanPct}%` }}
+              />
+            )}
+            {totalCCSpending > 0 && (
+              <div
+                className="bg-violet-400"
+                style={{ width: `${ccPct}%` }}
+              />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+            {totalActualExpenses > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span className="text-[10px] text-surface-500">
+                  Fijos {formatMoney(totalActualExpenses)}
+                </span>
+              </div>
+            )}
+            {debtPaymentsThisMonth > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />
+                <span className="text-[10px] text-surface-500">
+                  Préstamos {formatMoney(debtPaymentsThisMonth)}
+                </span>
+              </div>
+            )}
+            {totalCCSpending > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-violet-400 shrink-0" />
+                <span className="text-[10px] text-surface-500">
+                  Tarjetas {formatMoney(totalCCSpending)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+// ─── CC Section with drawer ───────────────────────────────────────────────────
 
 const CC_CATEGORY_LABELS: Record<string, string> = {
   food: "Comida",
@@ -302,48 +414,140 @@ const CC_CATEGORY_LABELS: Record<string, string> = {
 };
 
 function CCSpendingSection({ items }: { items: CCCategorySpending[] }) {
+  const [drawerCategory, setDrawerCategory] = useState<string | null>(null);
   const total = items.reduce((sum, i) => sum + i.total, 0);
   const max = items[0]?.total ?? 1;
+  const drawerItem = items.find((i) => i.category === drawerCategory) ?? null;
 
   return (
-    <div className="glass-card overflow-hidden">
-      <div className="p-4 border-b border-surface-300/30 flex items-center justify-between">
-        <div>
+    <>
+      <div className="glass-card overflow-hidden">
+        <div className="p-4 border-b border-surface-300/30">
           <div className="flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-violet-400" />
             <h3 className="section-title">Tarjetas de Crédito</h3>
           </div>
           <p className="text-xs text-surface-500 mt-0.5">
-            {formatMoney(total)} gastado este mes en {items.reduce((n, i) => n + i.count, 0)} transacciones
+            {formatMoney(total)} en{" "}
+            {items.reduce((n, i) => n + i.count, 0)} transacciones este mes
           </p>
         </div>
-      </div>
-      <div className="divide-y divide-surface-200/50">
-        {items.map((item) => {
-          const pct = (item.total / max) * 100;
-          const label = CC_CATEGORY_LABELS[item.category] ?? item.category;
-          return (
-            <div key={item.category} className="px-4 py-3 hover:bg-surface-200/30 transition-colors">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-surface-900">{label}</span>
-                  <span className="badge badge-info text-[10px]">{item.count} txn</span>
+        <div className="divide-y divide-surface-200/50">
+          {items.map((item) => {
+            const pct = (item.total / max) * 100;
+            const label = CC_CATEGORY_LABELS[item.category] ?? item.category;
+            return (
+              <button
+                key={item.category}
+                onClick={() => setDrawerCategory(item.category)}
+                className="w-full px-4 py-3 hover:bg-surface-200/30 transition-colors text-left"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-surface-900">{label}</span>
+                    <span className="badge badge-info text-[10px]">{item.count} txn</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-surface-600">
+                      {formatMoney(item.total)}
+                    </span>
+                    <ChevronRightSm className="w-3.5 h-3.5 text-surface-400" />
+                  </div>
                 </div>
-                <span className="font-mono text-xs text-surface-600">{formatMoney(item.total)}</span>
-              </div>
-              <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-violet-400 transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
+                <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-violet-400 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      {/* Drawer */}
+      <AnimatePresence>
+        {drawerCategory && drawerItem && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-40"
+              onClick={() => setDrawerCategory(null)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
+              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl overflow-hidden"
+              style={{ background: "var(--color-surface-100, #1a1a2e)", maxHeight: "70vh" }}
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-surface-400/40" />
+              </div>
+
+              {/* Header */}
+              <div className="px-5 pb-3 pt-1 border-b border-surface-300/20 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-surface-900">
+                    {CC_CATEGORY_LABELS[drawerItem.category] ?? drawerItem.category}
+                  </h3>
+                  <p className="text-xs text-surface-500">
+                    {drawerItem.count} transacciones ·{" "}
+                    <span className="font-mono font-semibold text-violet-400">
+                      {formatMoney(drawerItem.total)}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDrawerCategory(null)}
+                  className="btn-ghost p-1.5"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Transaction list */}
+              <div className="overflow-y-auto" style={{ maxHeight: "calc(70vh - 100px)" }}>
+                <div className="divide-y divide-surface-200/30">
+                  {[...drawerItem.transactions]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map((tx) => (
+                      <div
+                        key={tx.id}
+                        className="px-5 py-3.5 flex items-center justify-between"
+                      >
+                        <div className="flex-1 min-w-0 pr-4">
+                          <p className="text-sm font-medium text-surface-900 truncate">
+                            {tx.description}
+                          </p>
+                          <p className="text-xs text-surface-500 mt-0.5">{tx.date}</p>
+                          {tx.installment && (
+                            <p className="text-[10px] text-violet-400 mt-0.5">
+                              MSI {tx.installment.current}/{tx.installment.total}
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-mono text-sm font-semibold text-rose-400 shrink-0">
+                          {formatMoney(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
+
+// ─── Budget section ───────────────────────────────────────────────────────────
 
 function BudgetSection({
   title,
@@ -363,7 +567,7 @@ function BudgetSection({
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBudgeted, setNewBudgeted] = useState("");
-  const [newCategory, setNewCategory] = useState(type === "income" ? "salary" : "personal");
+  const [newCategory] = useState(type === "income" ? "salary" : "personal");
 
   const totalBudgeted = items.reduce((sum, i) => sum + i.budgeted, 0);
   const totalActual = items.reduce((sum, i) => sum + i.actual, 0);
@@ -377,10 +581,7 @@ function BudgetSection({
             {formatMoney(totalActual)} de {formatMoney(totalBudgeted)} presupuestado
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(!showAdd)}
-          className="btn-ghost text-sm"
-        >
+        <button onClick={() => setShowAdd(!showAdd)} className="btn-ghost text-sm">
           <Plus className="w-4 h-4" />
         </button>
       </div>
@@ -439,9 +640,7 @@ function BudgetSection({
           const paid = item.timesPaid || 0;
           const barColor =
             type === "income"
-              ? isOver
-                ? "bg-emerald-400"
-                : "bg-cyan-400"
+              ? "bg-cyan-400"
               : isOver
                 ? "bg-rose-400"
                 : "bg-amber-400";
@@ -452,9 +651,11 @@ function BudgetSection({
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-surface-900">{item.name}</span>
                   {times > 1 && (
-                    <span className={`badge text-[10px] ${
-                      paid >= times ? "badge-ok" : paid > 0 ? "badge-warning" : "badge-info"
-                    }`}>
+                    <span
+                      className={`badge text-[10px] ${
+                        paid >= times ? "badge-ok" : paid > 0 ? "badge-warning" : "badge-info"
+                      }`}
+                    >
                       {paid}/{times} pagos
                     </span>
                   )}

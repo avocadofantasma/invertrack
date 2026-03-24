@@ -15,6 +15,7 @@ export interface CCCategorySpending {
   category: string;
   total: number;
   count: number;
+  transactions: import("./types").CreditCardTransaction[];
 }
 import { generateId } from "./utils";
 
@@ -258,21 +259,22 @@ export function getCCSpendingByCategory(
   const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
   const monthEnd = `${nextMonth}-01`;
 
-  const totals: Record<string, { total: number; count: number }> = {};
+  const totals: Record<string, { total: number; count: number; transactions: import("./types").CreditCardTransaction[] }> = {};
 
   for (const statement of creditCardStatements) {
     for (const tx of statement.transactions) {
       if (tx.date >= monthStart && tx.date < monthEnd) {
         const cat = tx.category || "other";
-        if (!totals[cat]) totals[cat] = { total: 0, count: 0 };
+        if (!totals[cat]) totals[cat] = { total: 0, count: 0, transactions: [] };
         totals[cat].total += tx.amount;
         totals[cat].count += 1;
+        totals[cat].transactions.push(tx);
       }
     }
   }
 
   return Object.entries(totals)
-    .map(([category, { total, count }]) => ({ category, total, count }))
+    .map(([category, { total, count, transactions }]) => ({ category, total, count, transactions }))
     .sort((a, b) => b.total - a.total);
 }
 
