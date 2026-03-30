@@ -257,28 +257,23 @@ export function calculateBudgetActuals(
 
 /**
  * Aggregate credit card transaction spending by category for a given month.
- * Uses transaction date (not statement month) so Feb purchases go in Feb's budget.
+ * Uses statement month so all transactions on the statement due this month are included,
+ * regardless of when the individual purchases were made.
  */
 export function getCCSpendingByCategory(
   creditCardStatements: CreditCardStatement[],
   month: string
 ): CCCategorySpending[] {
-  const monthStart = `${month}-01`;
-  const [y, m] = month.split("-").map(Number);
-  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-  const monthEnd = `${nextMonth}-01`;
-
   const totals: Record<string, { total: number; count: number; transactions: import("./types").CreditCardTransaction[] }> = {};
 
   for (const statement of creditCardStatements) {
+    if (statement.month !== month) continue;
     for (const tx of statement.transactions) {
-      if (tx.date >= monthStart && tx.date < monthEnd) {
-        const cat = tx.category || "other";
-        if (!totals[cat]) totals[cat] = { total: 0, count: 0, transactions: [] };
-        totals[cat].total += tx.amount;
-        totals[cat].count += 1;
-        totals[cat].transactions.push(tx);
-      }
+      const cat = tx.category || "other";
+      if (!totals[cat]) totals[cat] = { total: 0, count: 0, transactions: [] };
+      totals[cat].total += tx.amount;
+      totals[cat].count += 1;
+      totals[cat].transactions.push(tx);
     }
   }
 
