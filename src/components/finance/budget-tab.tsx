@@ -17,6 +17,7 @@ import {
   Search,
   Link2,
   Link2Off,
+  CalendarClock,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -288,6 +289,13 @@ export function BudgetTab() {
           {ccSpendingByCategory.length > 0 && (
             <CCSpendingSection items={ccSpendingByCategory} expenseLimits={budget.expenseLimits} />
           )}
+
+          {/* MSI tracker */}
+          <MSITrackerSection
+            creditCardStatements={creditCardStatements}
+            creditCards={creditCards}
+            selectedMonth={selectedMonth}
+          />
 
           {/* Delete budget */}
           <div className="flex justify-end">
@@ -1271,6 +1279,201 @@ function BudgetSection({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── MSI Tracker ─────────────────────────────────────────────────────────────
+
+interface MSIItem {
+  key: string;
+  description: string;
+  cardId: string;
+  amount: number;
+  installmentCurrent: number;
+  installmentTotal: number;
+  remainingMonths: number; // payments remaining AFTER this month
+  remainingBalance: number; // amount × remainingMonths
+  isProjected: boolean; // true = no actual statement for selectedMonth
+}
+
+function MSITrackerSection({
+  creditCardStatements,
+  creditCards,
+  selectedMonth,
+}: {
+  creditCardStatements: CreditCardStatement[];
+  creditCards: CreditCardData[];
+  selectedMonth: string;
+}) {
+  const msiItems = useMemo<MSIItem[]>(() => {
+    // Collect ALL MSI transactions across every statement
+    const candidates: Array<{
+      key: string;
+      description: string;
+      cardId: string;
+      amount: number;
+      installmentCurrent: number;
+      installmentTotal: number;
+      statementMonth: string;
+    }> = [];
+
+    for (const stmt of creditCardStatements) {
+      if (stmt.month > selectedMonth) continue; // future statements: ignore
+      for (const tx of stmt.transactions) {
+        if (!tx.installment) continue;
+        const key = `${stmt.cardId}__${tx.description}__${tx.installment.total}__${Math.round(tx.amount * 100)}`;
+        candidates.push({
+          key,
+          description: tx.description,
+          cardId: stmt.cardId,
+          amount: tx.amount,
+          installmentCurrent: tx.installment.current,
+          installmentTotal: tx.installment.total,
+          statementMonth: stmt.month,
+        });
+      }
+    }
+
+    // Per key: keep only the most recent source statement ≤ selectedMonth
+    const best = new Map<string, typeof candidates[0]>();
+    for (const c of candidates) {
+      const existing = best.get(c.key);
+      if (!existing || c.statementMonth > existing.statementMonth) {
+        best.set(c.key, c);
+      }
+    }
+
+    // Project each to selectedMonth
+    const result: MSIItem[] = [];
+    for (const src of Array.from(best.values())) {
+      const [sy, sm] = src.statementMonth.split("-").map(Number);
+      const [ty, tm] = selectedMonth.split("-").map(Number);
+      const monthOffset = (ty - sy) * 12 + (tm - sm);
+
+      const currentInMonth = src.installmentCurrent + monthOffset;
+      if (currentInMonth > src.installmentTotal) continue; // already paid off
+      if (currentInMonth < 1) continue; // shouldn't happen, but guard
+
+      const remainingMonths = src.installmentTotal - currentInMonth;
+
+      result.push({
+        key: src.key,
+        description: src.description,
+        cardId: src.cardId,
+        amount: src.amount,
+        installmentCurrent: currentInMonth,
+        installmentTotal: src.installmentTotal,
+        remainingMonths,
+        remainingBalance: src.amount * remainingMonths,
+        isProjected: src.statementMonth !== selectedMonth,
+      });
+    }
+
+    return result.sort((a, b) => a.remainingMonths - b.remainingMonths);
+  }, [creditCardStatements, selectedMonth]);
+
+  if (msiItems.length === 0) return null;
+
+  const totalMonthlyMSI = msiItems.reduce((sum, i) => sum + i.amount, 0);
+  const totalRemainingMSI = msiItems.reduce((sum, i) => sum + i.remainingBalance, 0);
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-surface-300/30">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-amber-400" />
+          <h3 className="section-title">Meses Sin Intereses</h3>
+        </div>
+        <p className="text-xs text-surface-500 mt-0.5">
+          {formatMoney(totalMonthlyMSI)}/mes este mes ·{" "}
+          <span className="font-mono">{formatMoney(totalRemainingMSI)}</span> saldo restante tras este mes
+        </p>
+      </div>
+
+      <div className="divide-y divide-surface-200/50">
+        {msiItems.map((item) => {
+          const card = creditCards.find((c) => c.id === item.cardId);
+          const pct = (item.installmentCurrent / item.installmentTotal) * 100;
+          const isLast = item.remainingMonths === 0;
+
+          return (
+            <div key={item.key} className="px-4 py-3.5">
+              {/* Top row */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-surface-900 truncate">
+                    {item.description}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {card && (
+                      <span className="flex items-center gap-1 text-[10px] text-surface-500">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: card.color }}
+                        />
+                        {card.name}
+                      </span>
+                    )}
+                    {item.isProjected && (
+                      <span className="badge text-[9px] bg-amber-500/15 text-amber-400 border-amber-500/30">
+                        proyectado
+                      </span>
+                    )}
+                    {isLast && (
+                      <span className="badge text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                        último pago
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-mono text-sm font-semibold text-surface-900">
+                    {formatMoney(item.amount)}
+                    <span className="text-[10px] font-normal text-surface-500">/mes</span>
+                  </p>
+                  <p className="text-[10px] text-surface-500 mt-0.5">
+                    {item.installmentCurrent}/{item.installmentTotal} MSI
+                    {!isLast && (
+                      <> · {item.remainingMonths} mes{item.remainingMonths !== 1 ? "es" : ""} restante{item.remainingMonths !== 1 ? "s" : ""}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="mt-2.5 w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${isLast ? "bg-emerald-400" : "bg-amber-400"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              {/* Bottom meta */}
+              <div className="flex justify-between mt-1">
+                <span className="text-[10px] text-surface-600">
+                  {isLast
+                    ? "Se salda este mes"
+                    : `Saldo tras este mes: ${formatMoney(item.remainingBalance)}`}
+                </span>
+                <span className="text-[10px] text-surface-600">{Math.round(pct)}% pagado</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer totals */}
+      {msiItems.length > 1 && (
+        <div className="px-4 py-3 border-t border-surface-300/30 bg-surface-200/20 flex items-center justify-between">
+          <span className="text-xs text-surface-600">
+            {msiItems.length} compromisos activos
+          </span>
+          <span className="text-xs font-mono font-semibold text-amber-400">
+            {formatMoney(totalRemainingMSI)} total restante
+          </span>
+        </div>
+      )}
     </div>
   );
 }
