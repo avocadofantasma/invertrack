@@ -28,7 +28,7 @@ import {
   getCCSpendingByCategory,
 } from "@/lib/finance-utils";
 import { toast } from "sonner";
-import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement, IncomeSource, FixedExpense, Loan } from "@/lib/types";
+import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement, IncomeSource, FixedExpense, Loan, CCLinkedTransaction } from "@/lib/types";
 import type { CCCategorySpending } from "@/lib/finance-utils";
 
 export function BudgetTab() {
@@ -226,33 +226,53 @@ export function BudgetTab() {
               });
             }}
             onMarkCCPaid={(itemId, amount, cardId, transactionId, transactionDesc) => {
-              const updatedLimits = budget.expenseLimits.map((t) =>
-                t.id === itemId
-                  ? {
-                      ...t,
-                      paidViaCC: true,
-                      paidViaCCAmount: amount,
-                      paidViaCCCardId: cardId,
-                      paidViaCCTransactionId: transactionId,
-                      paidViaCCTransactionDesc: transactionDesc,
-                    }
-                  : t
-              );
+              const updatedLimits = budget.expenseLimits.map((t) => {
+                if (t.id !== itemId) return t;
+                const existing = t.ccTransactions ?? [];
+                // Avoid duplicates
+                if (existing.some((tx) => tx.transactionId === transactionId)) return t;
+                const newTx: CCLinkedTransaction = {
+                  transactionId: transactionId!,
+                  cardId: cardId!,
+                  transactionDesc: transactionDesc!,
+                  amount,
+                };
+                const ccTransactions = [...existing, newTx];
+                return {
+                  ...t,
+                  paidViaCC: true,
+                  paidViaCCAmount: ccTransactions.reduce((s, tx) => s + tx.amount, 0),
+                  ccTransactions,
+                };
+              });
               store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
             }}
-            onUnmarkCCPaid={(itemId) => {
-              const updatedLimits = budget.expenseLimits.map((t) =>
-                t.id === itemId
-                  ? {
-                      ...t,
-                      paidViaCC: false,
-                      paidViaCCAmount: undefined,
-                      paidViaCCCardId: undefined,
-                      paidViaCCTransactionId: undefined,
-                      paidViaCCTransactionDesc: undefined,
-                    }
-                  : t
-              );
+            onUnmarkCCPaid={(itemId, txId) => {
+              const updatedLimits = budget.expenseLimits.map((t) => {
+                if (t.id !== itemId) return t;
+                if (!txId) {
+                  // Clear all
+                  return {
+                    ...t,
+                    paidViaCC: false,
+                    paidViaCCAmount: undefined,
+                    paidViaCCCardId: undefined,
+                    paidViaCCTransactionId: undefined,
+                    paidViaCCTransactionDesc: undefined,
+                    ccTransactions: [],
+                  };
+                }
+                // Remove specific transaction
+                const ccTransactions = (t.ccTransactions ?? []).filter(
+                  (tx) => tx.transactionId !== txId
+                );
+                return {
+                  ...t,
+                  paidViaCC: ccTransactions.length > 0,
+                  paidViaCCAmount: ccTransactions.reduce((s, tx) => s + tx.amount, 0) || undefined,
+                  ccTransactions,
+                };
+              });
               store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
             }}
           />
@@ -838,7 +858,7 @@ function BudgetSection({
   onAddItem: (item: BudgetLineItem) => void;
   onDeleteItem: (id: string) => void;
   onMarkCCPaid?: (id: string, amount: number, cardId?: string, transactionId?: string, transactionDesc?: string) => void;
-  onUnmarkCCPaid?: (id: string) => void;
+  onUnmarkCCPaid?: (id: string, txId?: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
@@ -865,16 +885,6 @@ function BudgetSection({
       )
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [creditCardStatements, creditCards, selectedMonth]);
-
-  const filteredTransactions = useMemo(() => {
-    if (!ccSearch.trim()) return allTransactions;
-    const q = ccSearch.toLowerCase();
-    return allTransactions.filter(
-      (tx) =>
-        tx.description.toLowerCase().includes(q) ||
-        tx.cardName.toLowerCase().includes(q)
-    );
-  }, [allTransactions, ccSearch]);
 
   return (
     <div className="glass-card overflow-hidden">
@@ -938,6 +948,24 @@ function BudgetSection({
 
       <div className="divide-y divide-surface-200/50">
         {items.map((item) => {
+          // Normalise: migrate legacy single-tx fields into ccTransactions array
+          const linkedTxs: CCLinkedTransaction[] =
+            item.ccTransactions && item.ccTransactions.length > 0
+              ? item.ccTransactions
+              : item.paidViaCC && item.paidViaCCTransactionId
+              ? [
+                  {
+                    transactionId: item.paidViaCCTransactionId,
+                    cardId: item.paidViaCCCardId ?? "",
+                    transactionDesc: item.paidViaCCTransactionDesc ?? "",
+                    amount: item.paidViaCCAmount ?? item.budgeted,
+                  },
+                ]
+              : [];
+
+          const linkedIds = new Set(linkedTxs.map((t) => t.transactionId));
+          const linkedTotal = linkedTxs.reduce((s, tx) => s + tx.amount, 0);
+
           const pct = item.budgeted > 0 ? (item.actual / item.budgeted) * 100 : 0;
           const isOver = pct > 100;
           const times = item.timesPerMonth || 1;
@@ -951,16 +979,28 @@ function BudgetSection({
                   ? "bg-rose-400"
                   : "bg-amber-400";
 
+          // Picker: filter out already-linked transactions, then apply search
+          const availableTransactions = allTransactions.filter(
+            (tx) => !linkedIds.has(tx.id)
+          );
+          const filteredAvailable = ccSearch.trim()
+            ? availableTransactions.filter(
+                (tx) =>
+                  tx.description.toLowerCase().includes(ccSearch.toLowerCase()) ||
+                  tx.cardName.toLowerCase().includes(ccSearch.toLowerCase())
+              )
+            : availableTransactions;
+
           return (
             <div key={item.id} className="transition-colors">
               {/* Main row */}
               <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-200/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-sm font-medium text-surface-900 truncate">{item.name}</span>
-                  {item.paidViaCC && (
+                  {item.paidViaCC && linkedTxs.length > 0 && (
                     <span className="badge text-[10px] bg-violet-500/20 text-violet-300 border-violet-500/30 shrink-0 flex items-center gap-1">
                       <Link2 className="w-2.5 h-2.5" />
-                      TDC
+                      {linkedTxs.length > 1 ? `${linkedTxs.length} TDC` : "TDC"}
                     </span>
                   )}
                   {!item.paidViaCC && times > 1 && (
@@ -978,26 +1018,33 @@ function BudgetSection({
                     {formatMoney(item.actual)} / {formatMoney(item.budgeted)}
                   </span>
                   {type === "expense" && onMarkCCPaid && onUnmarkCCPaid && (
-                    item.paidViaCC ? (
-                      <button
-                        onClick={() => onUnmarkCCPaid(item.id)}
-                        className="p-1 rounded hover:bg-violet-500/10"
-                        title="Desligar cargo TDC"
-                      >
-                        <Link2Off className="w-3 h-3 text-violet-400" />
-                      </button>
-                    ) : (
+                    <>
+                      {item.paidViaCC && (
+                        <button
+                          onClick={() => onUnmarkCCPaid(item.id)}
+                          className="p-1 rounded hover:bg-rose-500/10"
+                          title="Quitar todos los cargos TDC"
+                        >
+                          <Link2Off className="w-3 h-3 text-violet-400 hover:text-rose-400 transition-colors" />
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setCCPickerFor(ccPickerFor === item.id ? null : item.id);
                           setCCSearch("");
                         }}
                         className="p-1 rounded hover:bg-violet-500/10"
-                        title="Ligar a cargo de TDC"
+                        title="Ligar cargo de TDC"
                       >
-                        <CreditCard className="w-3 h-3 text-surface-500 hover:text-violet-400 transition-colors" />
+                        <CreditCard
+                          className={`w-3 h-3 transition-colors ${
+                            ccPickerFor === item.id
+                              ? "text-violet-400"
+                              : "text-surface-500 hover:text-violet-400"
+                          }`}
+                        />
                       </button>
-                    )
+                    </>
                   )}
                   <button
                     onClick={() => onDeleteItem(item.id)}
@@ -1008,12 +1055,29 @@ function BudgetSection({
                 </div>
               </div>
 
-              {/* Linked transaction info */}
-              {item.paidViaCC && item.paidViaCCTransactionDesc && (
-                <div className="mx-4 mb-2 -mt-1 flex items-center gap-1.5 text-[10px] text-violet-400">
-                  <Link2 className="w-2.5 h-2.5 shrink-0" />
-                  <span className="truncate">{item.paidViaCCTransactionDesc}</span>
-                  <span className="shrink-0">· {formatMoney(item.paidViaCCAmount ?? 0)}</span>
+              {/* Linked transactions list */}
+              {linkedTxs.length > 0 && (
+                <div className="mx-4 mb-2 -mt-1 space-y-0.5">
+                  {linkedTxs.map((tx) => (
+                    <div key={tx.transactionId} className="flex items-center gap-1.5 text-[10px] text-violet-400">
+                      <Link2 className="w-2.5 h-2.5 shrink-0" />
+                      <span className="truncate flex-1">{tx.transactionDesc}</span>
+                      <span className="shrink-0 font-mono">{formatMoney(tx.amount)}</span>
+                      <button
+                        onClick={() => onUnmarkCCPaid?.(item.id, tx.transactionId)}
+                        className="shrink-0 p-0.5 rounded hover:text-rose-400 transition-colors"
+                        title="Desligar este cargo"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {linkedTxs.length > 1 && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-surface-500 pt-0.5 border-t border-violet-500/20">
+                      <span className="flex-1 font-medium">Total ligado</span>
+                      <span className="font-mono font-semibold text-violet-300">{formatMoney(linkedTotal)}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1037,7 +1101,14 @@ function BudgetSection({
                 <div className="mx-4 mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
                   <div className="p-3 border-b border-violet-500/20 flex items-center gap-2">
                     <CreditCard className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                    <span className="text-xs font-medium text-violet-300">Ligar a cargo de tarjeta</span>
+                    <span className="text-xs font-medium text-violet-300">
+                      {linkedTxs.length > 0 ? "Agregar otro cargo" : "Ligar cargo de tarjeta"}
+                    </span>
+                    {linkedTxs.length > 0 && (
+                      <span className="badge text-[10px] bg-violet-500/20 text-violet-300 border-violet-500/30">
+                        {linkedTxs.length} ligado{linkedTxs.length > 1 ? "s" : ""}
+                      </span>
+                    )}
                     <button
                       onClick={() => setCCPickerFor(null)}
                       className="ml-auto p-0.5 text-surface-500 hover:text-surface-300"
@@ -1062,13 +1133,13 @@ function BudgetSection({
                         />
                       </div>
                       <div className="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-violet-500/10">
-                        {filteredTransactions.map((tx) => (
+                        {filteredAvailable.map((tx) => (
                           <button
                             key={tx.id}
                             onClick={() => {
                               onMarkCCPaid?.(item.id, tx.amount, tx.cardId, tx.id, `${tx.cardName} · ${tx.description}`);
-                              setCCPickerFor(null);
                               setCCSearch("");
+                              // Keep picker open to add more
                             }}
                             className="w-full px-3 py-2.5 hover:bg-violet-500/10 transition-colors text-left flex items-center gap-3"
                           >
@@ -1085,8 +1156,12 @@ function BudgetSection({
                             </span>
                           </button>
                         ))}
-                        {filteredTransactions.length === 0 && (
-                          <p className="p-3 text-xs text-surface-500 text-center">Sin resultados</p>
+                        {filteredAvailable.length === 0 && (
+                          <p className="p-3 text-xs text-surface-500 text-center">
+                            {availableTransactions.length === 0
+                              ? "Todos los cargos ya están ligados"
+                              : "Sin resultados"}
+                          </p>
                         )}
                       </div>
                     </>

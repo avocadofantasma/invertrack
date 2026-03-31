@@ -222,6 +222,13 @@ export interface LoanPayment {
   notes: string;
 }
 
+export interface CCLinkedTransaction {
+  transactionId: string;
+  cardId: string;
+  transactionDesc: string;
+  amount: number;
+}
+
 export interface BudgetLineItem {
   id: string;
   name: string;
@@ -230,11 +237,12 @@ export interface BudgetLineItem {
   actual: number;
   timesPerMonth: number; // how many payments expected per month
   timesPaid: number; // how many payments made this month
-  paidViaCC?: boolean; // covered by a credit card charge (may have different merchant name)
-  paidViaCCAmount?: number; // actual CC charge amount (defaults to budgeted if not set)
-  paidViaCCCardId?: string; // which card this charge is linked to
-  paidViaCCTransactionId?: string; // specific transaction ID linked
-  paidViaCCTransactionDesc?: string; // description for display
+  paidViaCC?: boolean; // true when at least one CC charge is linked
+  paidViaCCAmount?: number; // sum of all linked CC charges
+  paidViaCCCardId?: string; // legacy – first card linked
+  paidViaCCTransactionId?: string; // legacy – first tx linked
+  paidViaCCTransactionDesc?: string; // legacy – first tx description
+  ccTransactions?: CCLinkedTransaction[]; // all linked CC charges
 }
 
 export interface MonthlyBudget {
