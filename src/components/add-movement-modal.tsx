@@ -2,23 +2,25 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, ArrowUpCircle, ArrowDownCircle, RefreshCw } from "lucide-react";
+import { X, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft } from "lucide-react";
 import type { Account, Movement } from "@/lib/types";
 import { formatMoney, toISODate, cn } from "@/lib/utils";
 
 interface Props {
   accounts: Account[];
   onClose: () => void;
-  onAdd: (movement: Omit<Movement, "id">) => void;
+  onAdd: (movements: Omit<Movement, "id">[]) => void;
 }
 
 export function AddMovementModal({ accounts, onClose, onAdd }: Props) {
   const [accountId, setAccountId] = useState("");
-  const [type, setType] = useState<Movement["type"]>("deposit");
+  const [toAccountId, setToAccountId] = useState("");
+  const [type, setType] = useState<Movement["type"] | "transfer">("deposit");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(toISODate(new Date()));
   const [notes, setNotes] = useState("");
 
+  const isTransfer = type === "transfer";
   const selectedAccount = accounts.find((a) => a.id === accountId);
 
   const handleSubmit = () => {
@@ -26,20 +28,47 @@ export function AddMovementModal({ accounts, onClose, onAdd }: Props) {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount === 0) return;
 
-    onAdd({
-      accountId,
-      date,
-      type,
-      amount: type === "withdrawal" ? -Math.abs(numAmount) : Math.abs(numAmount),
-      notes,
-    });
+    if (isTransfer) {
+      if (!toAccountId || toAccountId === accountId) return;
+      onAdd([
+        {
+          accountId,
+          date,
+          type: "withdrawal",
+          amount: -Math.abs(numAmount),
+          notes: notes || `Transferencia a ${accounts.find((a) => a.id === toAccountId)?.subAccount ?? "otra cuenta"}`,
+        },
+        {
+          accountId: toAccountId,
+          date,
+          type: "deposit",
+          amount: Math.abs(numAmount),
+          notes: notes || `Transferencia desde ${accounts.find((a) => a.id === accountId)?.subAccount ?? "otra cuenta"}`,
+        },
+      ]);
+    } else {
+      onAdd([
+        {
+          accountId,
+          date,
+          type: type as Movement["type"],
+          amount: type === "withdrawal" ? -Math.abs(numAmount) : Math.abs(numAmount),
+          notes,
+        },
+      ]);
+    }
   };
 
-  const types: { value: Movement["type"]; label: string; icon: typeof ArrowUpCircle; color: string }[] = [
+  const types: { value: Movement["type"] | "transfer"; label: string; icon: typeof ArrowUpCircle; color: string }[] = [
     { value: "deposit", label: "Depósito", icon: ArrowUpCircle, color: "text-accent-emerald border-accent-emerald/30 bg-accent-emerald/5" },
     { value: "withdrawal", label: "Retiro", icon: ArrowDownCircle, color: "text-accent-rose border-accent-rose/30 bg-accent-rose/5" },
     { value: "reinvestment", label: "Reinversión", icon: RefreshCw, color: "text-accent-cyan border-accent-cyan/30 bg-accent-cyan/5" },
+    { value: "transfer", label: "Transferencia", icon: ArrowRightLeft, color: "text-violet-400 border-violet-400/30 bg-violet-400/5" },
   ];
+
+  const canSubmit = isTransfer
+    ? accountId && toAccountId && toAccountId !== accountId && !!amount
+    : accountId && !!amount;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -71,13 +100,13 @@ export function AddMovementModal({ accounts, onClose, onAdd }: Props) {
           {/* Movement type */}
           <div>
             <label className="text-xs text-surface-500 mb-2 block">Tipo</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {types.map(({ value, label, icon: Icon, color }) => (
                 <button
                   key={value}
                   onClick={() => setType(value)}
                   className={cn(
-                    "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-sm",
+                    "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-xs",
                     type === value
                       ? color
                       : "border-surface-300/30 text-surface-500 hover:border-surface-400"
@@ -90,22 +119,62 @@ export function AddMovementModal({ accounts, onClose, onAdd }: Props) {
             </div>
           </div>
 
-          {/* Account selector */}
-          <div>
-            <label className="text-xs text-surface-500 mb-2 block">Cuenta</label>
-            <select
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="input-field"
-            >
-              <option value="">Seleccionar cuenta...</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.institution} — {a.subAccount}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Account selector(s) */}
+          {isTransfer ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-surface-500 mb-2 block">Cuenta origen</label>
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Seleccionar cuenta...</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} disabled={a.id === toAccountId}>
+                      {a.institution} — {a.subAccount}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-surface-300/30" />
+                <ArrowRightLeft className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                <div className="flex-1 h-px bg-surface-300/30" />
+              </div>
+              <div>
+                <label className="text-xs text-surface-500 mb-2 block">Cuenta destino</label>
+                <select
+                  value={toAccountId}
+                  onChange={(e) => setToAccountId(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Seleccionar cuenta...</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} disabled={a.id === accountId}>
+                      {a.institution} — {a.subAccount}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs text-surface-500 mb-2 block">Cuenta</label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="input-field"
+              >
+                <option value="">Seleccionar cuenta...</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.institution} — {a.subAccount}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Amount */}
           <div>
@@ -161,10 +230,10 @@ export function AddMovementModal({ accounts, onClose, onAdd }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!accountId || !amount}
+            disabled={!canSubmit}
             className={cn(
               "btn-primary flex-1",
-              (!accountId || !amount) && "opacity-50 cursor-not-allowed"
+              !canSubmit && "opacity-50 cursor-not-allowed"
             )}
           >
             Registrar

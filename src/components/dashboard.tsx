@@ -381,10 +381,12 @@ export function Dashboard() {
         <AddMovementModal
           accounts={accounts}
           onClose={() => setShowAddMovement(false)}
-          onAdd={(movement) => {
-            store.addMovement(movement);
+          onAdd={(movements) => {
+            movements.forEach((m) => store.addMovement(m));
             setShowAddMovement(false);
-            toast.success("Movimiento registrado");
+            toast.success(
+              movements.length > 1 ? "Transferencia registrada" : "Movimiento registrado"
+            );
           }}
         />
       )}
