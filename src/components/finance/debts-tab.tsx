@@ -69,7 +69,7 @@ export function DebtsTab() {
 
 function CreditCardsSection() {
   const store = useStore();
-  const { creditCards, creditCardStatements, financeSettings } = store;
+  const { creditCards, creditCardStatements, financeSettings, accounts } = store;
   const [showCardForm, setShowCardForm] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
@@ -212,13 +212,25 @@ function CreditCardsSection() {
                                 key={stmt.id}
                                 statement={stmt}
                                 card={card}
-                                onMarkPaid={() => {
+                                accounts={accounts}
+                                onMarkPaid={(fromAccountId) => {
+                                  const today = new Date().toISOString().split("T")[0];
                                   store.updateCreditCardStatement(stmt.id, {
                                     paid: true,
-                                    paidDate: new Date().toISOString().split("T")[0],
+                                    paidDate: today,
                                     paidAmount: stmt.totalBalance,
+                                    paidFromAccountId: fromAccountId || undefined,
                                   });
-                                  toast.success("Marcado como pagado");
+                                  if (fromAccountId) {
+                                    store.addMovement({
+                                      accountId: fromAccountId,
+                                      date: today,
+                                      type: "withdrawal",
+                                      amount: -stmt.totalBalance,
+                                      notes: `Pago TDC: ${card.name} (${stmt.month})`,
+                                    });
+                                  }
+                                  toast.success("Tarjeta marcada como pagada");
                                 }}
                                 onDelete={() => {
                                   store.deleteCreditCardStatement(stmt.id);
@@ -289,15 +301,19 @@ function CreditCardsSection() {
 function StatementCard({
   statement,
   card,
+  accounts,
   onMarkPaid,
   onDelete,
 }: {
   statement: CreditCardStatement;
   card: CreditCard;
-  onMarkPaid: () => void;
+  accounts: import("@/lib/types").Account[];
+  onMarkPaid: (fromAccountId: string) => void;
   onDelete: () => void;
 }) {
   const [showTxns, setShowTxns] = useState(false);
+  const [showPayForm, setShowPayForm] = useState(false);
+  const [fromAccountId, setFromAccountId] = useState("");
 
   return (
     <div className="bg-surface-200/30 rounded-xl p-3 space-y-2">
@@ -319,9 +335,37 @@ function StatementCard({
           </p>
         </div>
       </div>
+      {/* Inline pay form */}
+      {showPayForm && !statement.paid && (
+        <div className="flex items-center gap-2 bg-emerald-500/10 rounded-lg px-3 py-2">
+          <select
+            value={fromAccountId}
+            onChange={(e) => setFromAccountId(e.target.value)}
+            className="input-field py-1 text-xs flex-1"
+          >
+            <option value="">— Cuenta (opcional) —</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.institution} — {a.subAccount}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              onMarkPaid(fromAccountId);
+              setShowPayForm(false);
+            }}
+            className="btn-primary py-1 px-2 text-xs"
+          >
+            <Check className="w-3 h-3" />
+            Confirmar
+          </button>
+          <button onClick={() => setShowPayForm(false)} className="p-1 text-surface-500 hover:text-surface-300">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-2">
-        {!statement.paid && (
-          <button onClick={onMarkPaid} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+        {!statement.paid && !showPayForm && (
+          <button onClick={() => setShowPayForm(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
             <Check className="w-3 h-3" />
             Marcar pagado
           </button>
@@ -370,7 +414,7 @@ function StatementCard({
 
 function LoansSection() {
   const store = useStore();
-  const { loans, loanPayments } = store;
+  const { loans, loanPayments, accounts } = store;
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState<string | null>(null);
@@ -560,9 +604,19 @@ function LoansSection() {
       {showPaymentForm && (
         <LoanPaymentForm
           loan={loans.find((l) => l.id === showPaymentForm)!}
+          accounts={accounts}
           onClose={() => setShowPaymentForm(null)}
-          onSave={(payment) => {
+          onSave={(payment, fromAccountId) => {
             store.addLoanPayment(payment);
+            if (fromAccountId) {
+              store.addMovement({
+                accountId: fromAccountId,
+                date: payment.date,
+                type: "withdrawal",
+                amount: -payment.amount,
+                notes: `Pago préstamo: ${loans.find((l) => l.id === showPaymentForm)?.name ?? ""}`,
+              });
+            }
             toast.success("Pago registrado");
             setShowPaymentForm(null);
           }}
@@ -1185,16 +1239,19 @@ function LoanForm({
 
 function LoanPaymentForm({
   loan,
+  accounts,
   onClose,
   onSave,
 }: {
   loan: Loan;
+  accounts: import("@/lib/types").Account[];
   onClose: () => void;
-  onSave: (payment: Omit<LoanPayment, "id">) => void;
+  onSave: (payment: Omit<LoanPayment, "id">, fromAccountId?: string) => void;
 }) {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState(loan.monthlyPayment.toString());
   const [notes, setNotes] = useState("");
+  const [fromAccountId, setFromAccountId] = useState("");
 
   // Rough estimate of principal vs interest
   const monthlyRate = loan.interestRate / 100 / 12;
@@ -1205,15 +1262,19 @@ function LoanPaymentForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount) return;
-    onSave({
-      loanId: loan.id,
-      date,
-      amount: parseFloat(amount),
-      principal: Math.max(0, principalPortion),
-      interest: Math.max(0, interestPortion),
-      remainingAfter,
-      notes,
-    });
+    onSave(
+      {
+        loanId: loan.id,
+        fromAccountId: fromAccountId || undefined,
+        date,
+        amount: parseFloat(amount),
+        principal: Math.max(0, principalPortion),
+        interest: Math.max(0, interestPortion),
+        remainingAfter,
+        notes,
+      },
+      fromAccountId || undefined
+    );
   };
 
   return (
@@ -1251,6 +1312,20 @@ function LoanPaymentForm({
             </div>
           </div>
 
+          {accounts.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Pagar desde cuenta</label>
+              <select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)} className="input-field">
+                <option value="">— No asignar —</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.institution} — {a.subAccount}</option>
+                ))}
+              </select>
+              {fromAccountId && (
+                <p className="text-[11px] text-amber-400 mt-1">Se registrará un retiro en la cuenta seleccionada.</p>
+              )}
+            </div>
+          )}
           <div>
             <label className="text-xs font-medium text-surface-600 mb-1 block">Notas</label>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input-field" placeholder="Opcional" />

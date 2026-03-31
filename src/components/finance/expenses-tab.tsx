@@ -17,7 +17,7 @@ import {
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import type { FixedExpense, ExpenseEntry, ExpenseCategory } from "@/lib/types";
+import type { FixedExpense, ExpenseEntry, ExpenseCategory, Account } from "@/lib/types";
 
 const EXPENSE_ICONS: Record<string, typeof Zap> = {
   Electricidad: Zap,
@@ -39,7 +39,7 @@ function getExpenseIcon(name: string) {
 
 export function ExpensesTab() {
   const store = useStore();
-  const { fixedExpenses, expenseEntries } = store;
+  const { fixedExpenses, expenseEntries, accounts } = store;
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<FixedExpense | null>(null);
@@ -241,9 +241,19 @@ export function ExpensesTab() {
       {showEntryForm && (
         <ExpenseEntryForm
           fixedExpenses={fixedExpenses}
+          accounts={accounts}
           onClose={() => setShowEntryForm(false)}
-          onSave={(entry) => {
+          onSave={(entry, withdrawAccountId) => {
             store.addExpenseEntry(entry);
+            if (withdrawAccountId) {
+              store.addMovement({
+                accountId: withdrawAccountId,
+                date: entry.date,
+                type: "withdrawal",
+                amount: -entry.amount,
+                notes: `Gasto: ${entry.description}`,
+              });
+            }
             toast.success("Gasto registrado");
             setShowEntryForm(false);
           }}
@@ -347,18 +357,21 @@ function FixedExpenseForm({
 
 function ExpenseEntryForm({
   fixedExpenses,
+  accounts,
   onClose,
   onSave,
 }: {
   fixedExpenses: FixedExpense[];
+  accounts: Account[];
   onClose: () => void;
-  onSave: (entry: Omit<ExpenseEntry, "id">) => void;
+  onSave: (entry: Omit<ExpenseEntry, "id">, withdrawAccountId?: string) => void;
 }) {
   const [fixedExpenseId, setFixedExpenseId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("personal");
   const [description, setDescription] = useState("");
+  const [accountId, setAccountId] = useState("");
 
   const handleFixedChange = (id: string) => {
     setFixedExpenseId(id);
@@ -373,13 +386,17 @@ function ExpenseEntryForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
-    onSave({
-      fixedExpenseId: fixedExpenseId || undefined,
-      date,
-      amount: parseFloat(amount),
-      category,
-      description,
-    });
+    onSave(
+      {
+        fixedExpenseId: fixedExpenseId || undefined,
+        accountId: accountId || undefined,
+        date,
+        amount: parseFloat(amount),
+        category,
+        description,
+      },
+      accountId || undefined
+    );
   };
 
   return (
@@ -423,6 +440,26 @@ function ExpenseEntryForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Descripción</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} className="input-field" placeholder="Ej: Recibo de luz marzo" required />
           </div>
+          {accounts.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">
+                Pagar desde cuenta
+              </label>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field">
+                <option value="">— No asignar —</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.institution} — {a.subAccount}
+                  </option>
+                ))}
+              </select>
+              {accountId && (
+                <p className="text-[11px] text-amber-400 mt-1">
+                  Se registrará un retiro automático en la cuenta seleccionada.
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1">Registrar</button>

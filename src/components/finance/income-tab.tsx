@@ -210,8 +210,10 @@ export function IncomeTab() {
                 amount: entry.amount,
                 notes: `Ingreso: ${entry.description}`,
               });
+              toast.success("Ingreso registrado y depósito aplicado");
+            } else {
+              toast.success("Ingreso registrado");
             }
-            toast.success("Ingreso registrado");
             setShowEntryForm(false);
           }}
         />
@@ -341,7 +343,7 @@ function IncomeEntryForm({
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<IncomeCategory>("salary");
   const [description, setDescription] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
 
   // Auto-fill from source
   const handleSourceChange = (id: string) => {
@@ -357,16 +359,20 @@ function IncomeEntryForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
+    if (!accountId) {
+      toast.error("Selecciona una cuenta donde depositar el ingreso");
+      return;
+    }
     onSave(
       {
         sourceId: sourceId || undefined,
-        accountId: accountId || undefined,
+        accountId,
         date,
         amount: parseFloat(amount),
         category,
         description,
       },
-      accountId || undefined
+      accountId
     );
   };
 
@@ -412,26 +418,30 @@ function IncomeEntryForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Descripción</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} className="input-field" placeholder="Ej: Quincena marzo" required />
           </div>
-          {accounts.length > 0 && (
-            <div>
-              <label className="text-xs font-medium text-surface-600 mb-1 block">
-                Depositar en cuenta de inversión
-              </label>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field">
-                <option value="">— No asignar —</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.institution} — {a.subAccount}
-                  </option>
-                ))}
-              </select>
-              {accountId && (
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">
+              Depositar en cuenta <span className="text-rose-400">*</span>
+            </label>
+            {accounts.length === 0 ? (
+              <p className="text-xs text-amber-400 bg-amber-500/10 rounded-lg px-3 py-2">
+                No hay cuentas configuradas. Agrega una cuenta en la sección Dinero primero.
+              </p>
+            ) : (
+              <>
+                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field" required>
+                  <option value="">— Selecciona cuenta —</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.institution} — {a.subAccount}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-[11px] text-cyan-400 mt-1">
-                  Se registrará un depósito automático en la cuenta seleccionada.
+                  Se registrará un depósito automático en esta cuenta.
                 </p>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1">Registrar</button>

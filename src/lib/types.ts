@@ -143,6 +143,7 @@ export interface FixedExpense {
 export interface ExpenseEntry {
   id: string;
   fixedExpenseId?: string;
+  accountId?: string; // investment account this expense was paid from
   date: string;
   amount: number;
   category: string;
@@ -186,6 +187,7 @@ export interface CreditCardStatement {
   paid: boolean;
   paidAmount?: number;
   paidDate?: string;
+  paidFromAccountId?: string; // account the CC payment came from
 }
 
 export interface Loan {
@@ -210,6 +212,7 @@ export interface Loan {
 export interface LoanPayment {
   id: string;
   loanId: string;
+  fromAccountId?: string; // account the payment came from
   date: string;
   amount: number;
   principal: number;
