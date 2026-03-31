@@ -1014,9 +1014,20 @@ function BudgetSection({
                   ? "bg-rose-400"
                   : "bg-amber-400";
 
-          // Picker: filter out already-linked transactions, then apply search + chips
+          // Picker: filter out transactions linked to this item OR any other item
+          const globalLinkedIds = new Set(
+            items.flatMap((it) => {
+              const txs =
+                it.ccTransactions && it.ccTransactions.length > 0
+                  ? it.ccTransactions
+                  : it.paidViaCC && it.paidViaCCTransactionId
+                  ? [{ transactionId: it.paidViaCCTransactionId }]
+                  : [];
+              return txs.map((t) => t.transactionId);
+            })
+          );
           const availableTransactions = allTransactions.filter(
-            (tx) => !linkedIds.has(tx.id)
+            (tx) => !globalLinkedIds.has(tx.id)
           );
           // Unique cards & categories for filter chips
           const pickerCards = Array.from(
