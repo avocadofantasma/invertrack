@@ -56,6 +56,49 @@ export function BudgetTab() {
     }
   }, [selectedMonth]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync fixedExpenses changes into the existing budget for the selected month.
+  // Preserves manually-added items, CC links, and actual spending data.
+  useEffect(() => {
+    const existing = monthlyBudgets.find((b) => b.month === selectedMonth);
+    if (!existing) return;
+
+    // Update budgeted amount / timesPerMonth for items that match a fixedExpense by name
+    let synced = existing.expenseLimits.map((limit) => {
+      const match = fixedExpenses.find((e) => e.name === limit.name);
+      if (!match) return limit;
+      return {
+        ...limit,
+        budgeted: match.expectedAmount,
+        timesPerMonth: match.timesPerMonth || 1,
+        category: match.category,
+      };
+    });
+
+    // Add fixedExpenses that are enabled but have no matching limit yet
+    const existingNames = new Set(existing.expenseLimits.map((l) => l.name));
+    for (const expense of fixedExpenses.filter((e) => e.enabled)) {
+      if (!existingNames.has(expense.name)) {
+        synced = [
+          ...synced,
+          {
+            id: crypto.randomUUID(),
+            name: expense.name,
+            category: expense.category,
+            budgeted: expense.expectedAmount,
+            actual: 0,
+            timesPerMonth: expense.timesPerMonth || 1,
+            timesPaid: 0,
+          },
+        ];
+      }
+    }
+
+    // Only persist if something actually changed
+    if (JSON.stringify(synced) !== JSON.stringify(existing.expenseLimits)) {
+      store.updateMonthlyBudget(existing.id, { expenseLimits: synced });
+    }
+  }, [fixedExpenses, selectedMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const budget = useMemo(() => {
     const existing = monthlyBudgets.find((b) => b.month === selectedMonth);
     if (existing) {
@@ -154,7 +197,7 @@ export function BudgetTab() {
           {/* Projection Pie */}
           <BudgetProjectionPie
             incomeSources={incomeSources}
-            fixedExpenses={fixedExpenses}
+            expenseLimits={budget.expenseLimits}
             loans={loans}
           />
 
@@ -667,11 +710,11 @@ const PIE_COLORS = {
 
 function BudgetProjectionPie({
   incomeSources,
-  fixedExpenses,
+  expenseLimits,
   loans,
 }: {
   incomeSources: IncomeSource[];
-  fixedExpenses: FixedExpense[];
+  expenseLimits: BudgetLineItem[];
   loans: Loan[];
 }) {
   const totalIncome = incomeSources
@@ -681,13 +724,13 @@ function BudgetProjectionPie({
       return sum + s.amount * times;
     }, 0);
 
-  const personalTotal = fixedExpenses
-    .filter((e) => e.enabled && e.category === "personal")
-    .reduce((sum, e) => sum + e.expectedAmount, 0);
+  const personalTotal = expenseLimits
+    .filter((e) => e.category === "personal")
+    .reduce((sum, e) => sum + e.budgeted, 0);
 
-  const businessTotal = fixedExpenses
-    .filter((e) => e.enabled && e.category === "business")
-    .reduce((sum, e) => sum + e.expectedAmount, 0);
+  const businessTotal = expenseLimits
+    .filter((e) => e.category === "business")
+    .reduce((sum, e) => sum + e.budgeted, 0);
 
   const loansTotal = loans
     .filter((l) => l.enabled)
