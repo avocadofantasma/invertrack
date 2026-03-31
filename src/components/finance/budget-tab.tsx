@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import {
   Plus,
   Trash2,
@@ -18,6 +18,7 @@ import {
   Link2,
   Link2Off,
   CalendarClock,
+  TrendingUp,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -200,6 +201,15 @@ export function BudgetTab() {
             incomeSources={incomeSources}
             expenseLimits={budget.expenseLimits}
             loans={loans}
+          />
+
+          {/* Finance projections */}
+          <FinanceProjectionChart
+            incomeSources={incomeSources}
+            expenseLimits={budget.expenseLimits}
+            loans={loans}
+            creditCardStatements={creditCardStatements}
+            selectedMonth={selectedMonth}
           />
 
           {/* Expense breakdown */}
@@ -757,6 +767,288 @@ function CCSpendingSection({ items, expenseLimits }: { items: CCCategorySpending
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ─── Finance Projection Chart ─────────────────────────────────────────────────
+
+const HORIZONS = [
+  { label: "6m",  months: 6  },
+  { label: "1a",  months: 12 },
+  { label: "2a",  months: 24 },
+  { label: "4a",  months: 48 },
+  { label: "5a",  months: 60 },
+];
+
+function addMonths(yyyymm: string, n: number): string {
+  const [y, m] = yyyymm.split("-").map(Number);
+  const d = new Date(y, m - 1 + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function FinanceProjectionChart({
+  incomeSources,
+  expenseLimits,
+  loans,
+  creditCardStatements,
+  selectedMonth,
+}: {
+  incomeSources: IncomeSource[];
+  expenseLimits: BudgetLineItem[];
+  loans: Loan[];
+  creditCardStatements: CreditCardStatement[];
+  selectedMonth: string;
+}) {
+  const [horizonIdx, setHorizonIdx] = useState(1); // default 12m
+
+  // Extract unique MSI streams from all statements ≤ selectedMonth
+  const msiStreams = useMemo(() => {
+    type Stream = {
+      key: string;
+      description: string;
+      amount: number;
+      installmentCurrent: number;
+      installmentTotal: number;
+      statementMonth: string;
+    };
+    const best = new Map<string, Stream>();
+    for (const stmt of creditCardStatements) {
+      if (stmt.month > selectedMonth) continue;
+      for (const tx of stmt.transactions) {
+        if (!tx.installment) continue;
+        const key = `${stmt.cardId}__${tx.description}__${tx.installment.total}__${Math.round(tx.amount * 100)}`;
+        const existing = best.get(key);
+        if (!existing || stmt.month > existing.statementMonth) {
+          best.set(key, {
+            key,
+            description: tx.description,
+            amount: tx.amount,
+            installmentCurrent: tx.installment.current,
+            installmentTotal: tx.installment.total,
+            statementMonth: stmt.month,
+          });
+        }
+      }
+    }
+    return Array.from(best.values());
+  }, [creditCardStatements, selectedMonth]);
+
+  const monthlyIncome = useMemo(
+    () =>
+      incomeSources
+        .filter((s) => s.enabled)
+        .reduce((sum, s) => {
+          const times = s.timesPerMonth || (s.frequency === "biweekly" ? 2 : 1);
+          return sum + s.amount * times;
+        }, 0),
+    [incomeSources]
+  );
+
+  const horizonMonths = HORIZONS[horizonIdx].months;
+
+  const data = useMemo(() => {
+    const points: Array<{
+      label: string;
+      income: number;
+      fixed: number;
+      loans: number;
+      msi: number;
+      surplus: number;
+      accumulated: number;
+    }> = [];
+
+    let accumulated = 0;
+
+    for (let i = 1; i <= horizonMonths; i++) {
+      const month = addMonths(selectedMonth, i);
+      const [y, m] = month.split("-").map(Number);
+      const date = new Date(y, m - 1);
+      const label = date.toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+
+      // Fixed expenses (constant)
+      const fixed = expenseLimits.reduce((sum, e) => sum + e.budgeted, 0);
+
+      // Active loan payments for this future month
+      let loanTotal = 0;
+      for (const loan of loans) {
+        if (!loan.enabled || loan.remainingBalance <= 0) continue;
+        // Determine how many payments have been made as of selectedMonth
+        const paidSoFar = loan.paidInstallments;
+        const paymentOffset = i; // i months from now = i more payments
+        if (paidSoFar + paymentOffset <= loan.totalInstallments) {
+          loanTotal += loan.monthlyPayment;
+        }
+      }
+
+      // Active MSI charges for this future month
+      let msiTotal = 0;
+      for (const stream of msiStreams) {
+        const [sy, sm] = stream.statementMonth.split("-").map(Number);
+        const [ty, tm] = month.split("-").map(Number);
+        const offset = (ty - sy) * 12 + (tm - sm);
+        const projected = stream.installmentCurrent + offset;
+        if (projected >= 1 && projected <= stream.installmentTotal) {
+          msiTotal += stream.amount;
+        }
+      }
+
+      const totalExpenses = fixed + loanTotal + msiTotal;
+      const surplus = monthlyIncome - totalExpenses;
+      accumulated += surplus;
+
+      points.push({ label, income: monthlyIncome, fixed, loans: loanTotal, msi: msiTotal, surplus, accumulated });
+    }
+    return points;
+  }, [horizonMonths, selectedMonth, expenseLimits, loans, msiStreams, monthlyIncome]);
+
+  if (monthlyIncome === 0 && expenseLimits.length === 0) return null;
+
+  const last = data[data.length - 1];
+  const avgSurplus = data.reduce((s, d) => s + d.surplus, 0) / (data.length || 1);
+  const loansPayingOff = loans.filter((l) => {
+    if (!l.enabled || l.remainingBalance <= 0) return false;
+    return l.paidInstallments + horizonMonths >= l.totalInstallments;
+  }).length;
+  const msiFinishing = msiStreams.filter((s) => {
+    const [sy, sm] = s.statementMonth.split("-").map(Number);
+    const [ty, tm] = addMonths(selectedMonth, horizonMonths).split("-").map(Number);
+    const offset = (ty - sy) * 12 + (tm - sm);
+    return s.installmentCurrent + offset >= s.installmentTotal;
+  }).length;
+
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="glass-card-elevated p-3 min-w-[180px] text-xs space-y-1">
+        <p className="font-medium text-surface-600 mb-2">{label}</p>
+        {payload.map((p) => (
+          <div key={p.name} className="flex justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+              <span className="text-surface-700">{p.name}</span>
+            </div>
+            <span className={`font-mono font-semibold ${p.name === "Disponible" ? (p.value >= 0 ? "text-emerald-400" : "text-rose-400") : "text-surface-900"}`}>
+              {formatMoney(p.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="glass-card overflow-hidden">
+      {/* Header */}
+      <div className="p-4 border-b border-surface-300/30 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-brand-400" />
+          <h3 className="section-title">Proyección de flujo</h3>
+        </div>
+        {/* Horizon tabs */}
+        <div className="flex items-center gap-0.5 bg-surface-300/30 rounded-lg p-0.5">
+          {HORIZONS.map((h, i) => (
+            <button
+              key={h.label}
+              onClick={() => setHorizonIdx(i)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                i === horizonIdx
+                  ? "bg-brand-500 text-white"
+                  : "text-surface-600 hover:text-surface-900"
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 divide-x divide-surface-300/30 border-b border-surface-300/30">
+        <div className="p-3 text-center">
+          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Ahorro acumulado</p>
+          <p className={`font-mono text-sm font-bold mt-0.5 ${last?.accumulated >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {formatMoney(last?.accumulated ?? 0)}
+          </p>
+        </div>
+        <div className="p-3 text-center">
+          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Promedio mensual</p>
+          <p className={`font-mono text-sm font-bold mt-0.5 ${avgSurplus >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {formatMoney(avgSurplus)}
+          </p>
+        </div>
+        <div className="p-3 text-center">
+          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Se saldan</p>
+          <p className="font-mono text-sm font-bold mt-0.5 text-amber-400">
+            {loansPayingOff + msiFinishing > 0 ? `${loansPayingOff + msiFinishing} compromisos` : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Area chart */}
+      <div className="p-4 pt-3">
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="proj-income" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#34d399" stopOpacity={0.03} />
+                </linearGradient>
+                <linearGradient id="proj-fixed" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#fb7185" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#fb7185" stopOpacity={0.03} />
+                </linearGradient>
+                <linearGradient id="proj-accum" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#818cf8" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#818cf8" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 9, fill: "rgba(255,255,255,0.4)" }}
+                tickLine={false}
+                axisLine={false}
+                interval={horizonMonths <= 12 ? 1 : horizonMonths <= 24 ? 2 : 5}
+              />
+              <YAxis
+                tick={{ fontSize: 9, fill: "rgba(255,255,255,0.4)" }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v))}
+                width={36}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="income"      name="Ingreso"     stroke="#34d399" strokeWidth={1.5} fill="url(#proj-income)" />
+              <Area type="monotone" dataKey="fixed"       name="G. Fijos"    stroke="#fb7185" strokeWidth={1.5} fill="url(#proj-fixed)"  />
+              {data.some((d) => d.loans > 0) && (
+                <Area type="monotone" dataKey="loans"     name="Préstamos"   stroke="#f97316" strokeWidth={1.5} fill="none" strokeDasharray="4 2" />
+              )}
+              {data.some((d) => d.msi > 0) && (
+                <Area type="monotone" dataKey="msi"       name="MSI"         stroke="#e879f9" strokeWidth={1.5} fill="none" strokeDasharray="4 2" />
+              )}
+              <Area type="monotone" dataKey="accumulated" name="Disponible"  stroke="#818cf8" strokeWidth={2}   fill="url(#proj-accum)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Mini legend */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
+          {[
+            { label: "Ingreso",    color: "#34d399" },
+            { label: "G. Fijos",   color: "#fb7185" },
+            ...(data.some((d) => d.loans > 0) ? [{ label: "Préstamos", color: "#f97316" }] : []),
+            ...(data.some((d) => d.msi > 0)   ? [{ label: "MSI",       color: "#e879f9" }] : []),
+            { label: "Acumulado",  color: "#818cf8" },
+          ].map((l) => (
+            <div key={l.label} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+              <span className="text-[10px] text-surface-500">{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
