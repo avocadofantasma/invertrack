@@ -18,6 +18,9 @@ import {
   DollarSign,
   Receipt,
   PieChart,
+  SlidersHorizontal,
+  X,
+  Check,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import {
@@ -54,6 +57,7 @@ type Tab =
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [showAddMovement, setShowAddMovement] = useState(false);
+  const [correctingAccount, setCorrectingAccount] = useState<{ id: string; name: string; currentBalance: number } | null>(null);
 
   const store = useStore();
   const { accounts, movements, initialBalances, monthlyContributions, marketData } = store;
@@ -313,6 +317,44 @@ export function Dashboard() {
                 </table>
               </div>
             </div>
+
+            {/* Balance corrections */}
+            <div className="glass-card overflow-hidden">
+              <div className="p-4 border-b border-surface-300/30 flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
+                <div>
+                  <h3 className="section-title">Ajustar saldos actuales</h3>
+                  <p className="text-xs text-surface-500 mt-0.5">
+                    Si el saldo real difiere de la proyección, registra un ajuste.
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y divide-surface-200/50">
+                {accountSummaries.map((s) => (
+                  <div key={s.account.id} className="flex items-center gap-4 px-4 py-3">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: s.account.color }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-surface-900">{s.account.institution} — {s.account.subAccount}</p>
+                      <p className="text-xs text-surface-500 font-mono">{formatMoney(s.currentBalance)}</p>
+                    </div>
+                    <button
+                      onClick={() => setCorrectingAccount({
+                        id: s.account.id,
+                        name: `${s.account.institution} — ${s.account.subAccount}`,
+                        currentBalance: s.currentBalance,
+                      })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      Corregir saldo
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -330,6 +372,32 @@ export function Dashboard() {
         {activeTab === "settings" && <DataManager />}
       </main>
 
+      {/* Balance Correction Modal */}
+      {correctingAccount && (
+        <BalanceCorrectionModal
+          accountId={correctingAccount.id}
+          accountName={correctingAccount.name}
+          currentBalance={correctingAccount.currentBalance}
+          onClose={() => setCorrectingAccount(null)}
+          onSave={(accountId, targetBalance, currentBalance, date) => {
+            const diff = targetBalance - currentBalance;
+            if (diff === 0) {
+              setCorrectingAccount(null);
+              return;
+            }
+            store.addMovement({
+              accountId,
+              date,
+              type: diff > 0 ? "deposit" : "withdrawal",
+              amount: Math.abs(diff),
+              notes: "Ajuste de saldo",
+            });
+            toast.success("Ajuste registrado");
+            setCorrectingAccount(null);
+          }}
+        />
+      )}
+
       {/* Add Movement Modal */}
       {showAddMovement && (
         <AddMovementModal
@@ -342,6 +410,84 @@ export function Dashboard() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function BalanceCorrectionModal({
+  accountId,
+  accountName,
+  currentBalance,
+  onClose,
+  onSave,
+}: {
+  accountId: string;
+  accountName: string;
+  currentBalance: number;
+  onClose: () => void;
+  onSave: (accountId: string, targetBalance: number, currentBalance: number, date: string) => void;
+}) {
+  const [targetBalance, setTargetBalance] = useState(currentBalance.toFixed(2));
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const diff = parseFloat(targetBalance) - currentBalance;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(accountId, parseFloat(targetBalance), currentBalance, date);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-card-elevated p-6 w-full max-w-sm"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="section-title">Corregir saldo</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-300/50 transition-colors">
+            <X className="w-4 h-4 text-surface-500" />
+          </button>
+        </div>
+        <p className="text-sm text-surface-600 mb-4">{accountName}</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">
+              Saldo proyectado actual
+            </label>
+            <p className="font-mono text-sm text-surface-700">{formatMoney(currentBalance)}</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">
+              Saldo real (actual)
+            </label>
+            <input
+              type="number"
+              value={targetBalance}
+              onChange={(e) => setTargetBalance(e.target.value)}
+              className="input-field"
+              min="0"
+              step="0.01"
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">Fecha del ajuste</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" required />
+          </div>
+          {!isNaN(diff) && diff !== 0 && (
+            <div className={`p-3 rounded-lg text-sm ${diff > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"}`}>
+              Se registrará un {diff > 0 ? "depósito" : "retiro"} de {formatMoney(Math.abs(diff))} como ajuste.
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1">Guardar ajuste</button>
+          </div>
+        </form>
+      </motion.div>
     </div>
   );
 }

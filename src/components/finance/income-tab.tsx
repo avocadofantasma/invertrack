@@ -15,7 +15,7 @@ import {
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { IncomeCategory, IncomeSource, IncomeEntry } from "@/lib/types";
+import type { IncomeCategory, IncomeSource, IncomeEntry, Account } from "@/lib/types";
 
 const CATEGORY_CONFIG: Record<
   IncomeCategory,
@@ -30,7 +30,7 @@ const CATEGORY_CONFIG: Record<
 
 export function IncomeTab() {
   const store = useStore();
-  const { incomeSources, incomeEntries } = store;
+  const { incomeSources, incomeEntries, accounts } = store;
   const [showSourceForm, setShowSourceForm] = useState(false);
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [editingSource, setEditingSource] = useState<IncomeSource | null>(null);
@@ -198,9 +198,19 @@ export function IncomeTab() {
       {showEntryForm && (
         <IncomeEntryForm
           sources={incomeSources}
+          accounts={accounts}
           onClose={() => setShowEntryForm(false)}
-          onSave={(entry) => {
+          onSave={(entry, depositAccountId) => {
             store.addIncomeEntry(entry);
+            if (depositAccountId) {
+              store.addMovement({
+                accountId: depositAccountId,
+                date: entry.date,
+                type: "deposit",
+                amount: entry.amount,
+                notes: `Ingreso: ${entry.description}`,
+              });
+            }
             toast.success("Ingreso registrado");
             setShowEntryForm(false);
           }}
@@ -317,18 +327,21 @@ function IncomeSourceForm({
 
 function IncomeEntryForm({
   sources,
+  accounts,
   onClose,
   onSave,
 }: {
   sources: IncomeSource[];
+  accounts: Account[];
   onClose: () => void;
-  onSave: (entry: Omit<IncomeEntry, "id">) => void;
+  onSave: (entry: Omit<IncomeEntry, "id">, depositAccountId?: string) => void;
 }) {
   const [sourceId, setSourceId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<IncomeCategory>("salary");
   const [description, setDescription] = useState("");
+  const [accountId, setAccountId] = useState("");
 
   // Auto-fill from source
   const handleSourceChange = (id: string) => {
@@ -344,13 +357,17 @@ function IncomeEntryForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
-    onSave({
-      sourceId: sourceId || undefined,
-      date,
-      amount: parseFloat(amount),
-      category,
-      description,
-    });
+    onSave(
+      {
+        sourceId: sourceId || undefined,
+        accountId: accountId || undefined,
+        date,
+        amount: parseFloat(amount),
+        category,
+        description,
+      },
+      accountId || undefined
+    );
   };
 
   return (
@@ -395,6 +412,26 @@ function IncomeEntryForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Descripción</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} className="input-field" placeholder="Ej: Quincena marzo" required />
           </div>
+          {accounts.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-surface-600 mb-1 block">
+                Depositar en cuenta de inversión
+              </label>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field">
+                <option value="">— No asignar —</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.institution} — {a.subAccount}
+                  </option>
+                ))}
+              </select>
+              {accountId && (
+                <p className="text-[11px] text-cyan-400 mt-1">
+                  Se registrará un depósito automático en la cuenta seleccionada.
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1">Registrar</button>

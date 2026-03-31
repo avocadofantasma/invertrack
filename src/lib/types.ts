@@ -122,6 +122,7 @@ export interface IncomeSource {
 export interface IncomeEntry {
   id: string;
   sourceId?: string;
+  accountId?: string; // investment account this income was deposited into
   date: string;
   amount: number;
   category: IncomeCategory;

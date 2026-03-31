@@ -13,6 +13,7 @@ import {
   CreditCard,
   X,
   ChevronRight as ChevronRightSm,
+  Check,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -24,7 +25,7 @@ import {
   getCCSpendingByCategory,
 } from "@/lib/finance-utils";
 import { toast } from "sonner";
-import type { MonthlyBudget, BudgetLineItem } from "@/lib/types";
+import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement } from "@/lib/types";
 import type { CCCategorySpending } from "@/lib/finance-utils";
 
 export function BudgetTab() {
@@ -35,6 +36,7 @@ export function BudgetTab() {
     fixedExpenses,
     incomeEntries,
     expenseEntries,
+    creditCards,
     creditCardStatements,
     loanPayments,
   } = store;
@@ -195,6 +197,21 @@ export function BudgetTab() {
                   : t
               );
               store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
+            }}
+          />
+
+          {/* Credit card payment status */}
+          <CCPaymentStatusSection
+            creditCards={creditCards}
+            creditCardStatements={creditCardStatements}
+            selectedMonth={selectedMonth}
+            onMarkPaid={(statementId, balance) => {
+              store.updateCreditCardStatement(statementId, {
+                paid: true,
+                paidDate: new Date().toISOString().split("T")[0],
+                paidAmount: balance,
+              });
+              toast.success("Tarjeta marcada como pagada");
             }}
           />
 
@@ -413,6 +430,70 @@ function BudgetOverview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── CC Payment Status ────────────────────────────────────────────────────────
+
+function CCPaymentStatusSection({
+  creditCards,
+  creditCardStatements,
+  selectedMonth,
+  onMarkPaid,
+}: {
+  creditCards: CreditCardData[];
+  creditCardStatements: CreditCardStatement[];
+  selectedMonth: string;
+  onMarkPaid: (statementId: string, balance: number) => void;
+}) {
+  const monthStatements = creditCardStatements.filter(
+    (s) => s.month === selectedMonth
+  );
+  if (monthStatements.length === 0) return null;
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-surface-300/30 flex items-center gap-2">
+        <CreditCard className="w-4 h-4 text-violet-400" />
+        <h3 className="section-title">Pago de tarjetas — {selectedMonth}</h3>
+      </div>
+      <div className="divide-y divide-surface-200/50">
+        {monthStatements.map((stmt) => {
+          const card = creditCards.find((c) => c.id === stmt.cardId);
+          return (
+            <div key={stmt.id} className="flex items-center gap-4 px-4 py-3">
+              <div
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: card?.color ?? "#71717a" }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-surface-900">{card?.name ?? stmt.cardId}</p>
+                <p className="text-xs text-surface-500">
+                  Vence: {stmt.dueDate} · Mín: {formatMoney(stmt.minimumPayment)}
+                </p>
+              </div>
+              <p className="font-mono text-sm font-semibold text-surface-900 shrink-0">
+                {formatMoney(stmt.totalBalance)}
+              </p>
+              {stmt.paid ? (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 shrink-0">
+                  <Check className="w-3 h-3" />
+                  Pagada {stmt.paidDate ? `(${stmt.paidDate})` : ""}
+                </span>
+              ) : (
+                <button
+                  onClick={() => onMarkPaid(stmt.id, stmt.totalBalance)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-surface-200/50 text-surface-600 hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors shrink-0"
+                >
+                  <Check className="w-3 h-3" />
+                  Marcar pagada
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
