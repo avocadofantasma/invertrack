@@ -78,12 +78,21 @@ export function BudgetTab() {
   );
   const totalCCSpending = ccSpendingByCategory.reduce((sum, c) => sum + c.total, 0);
 
-  const totalBudgetedIncome = budget
-    ? budget.incomeTargets.reduce((sum, t) => sum + t.budgeted, 0)
-    : 0;
-  const totalActualIncome = budget
-    ? budget.incomeTargets.reduce((sum, t) => sum + t.actual, 0)
-    : 0;
+  const totalBudgetedIncome = incomeSources
+    .filter((s) => s.enabled)
+    .reduce((sum, s) => {
+      const times = s.timesPerMonth || (s.frequency === "biweekly" ? 2 : 1);
+      return sum + s.amount * times;
+    }, 0);
+
+  const selectedMonthStart = `${selectedMonth}-01`;
+  const [smY, smM] = selectedMonth.split("-").map(Number);
+  const selectedMonthEnd = smM === 12
+    ? `${smY + 1}-01-01`
+    : `${smY}-${String(smM + 1).padStart(2, "0")}-01`;
+  const totalActualIncome = incomeEntries
+    .filter((e) => e.date >= selectedMonthStart && e.date < selectedMonthEnd)
+    .reduce((sum, e) => sum + e.amount, 0);
   const totalBudgetedExpenses = budget
     ? budget.expenseLimits.reduce((sum, t) => sum + t.budgeted, 0)
     : 0;
@@ -136,29 +145,6 @@ export function BudgetTab() {
             totalActualExpenses={totalActualExpenses}
             debtPaymentsThisMonth={debtPaymentsThisMonth}
             totalCCSpending={netCCSpending}
-          />
-
-          {/* Income breakdown */}
-          <BudgetSection
-            title="Ingresos"
-            items={budget.incomeTargets}
-            type="income"
-            onUpdateItem={(itemId, updates) => {
-              const updatedTargets = budget.incomeTargets.map((t) =>
-                t.id === itemId ? { ...t, ...updates } : t
-              );
-              store.updateMonthlyBudget(budget.id, { incomeTargets: updatedTargets });
-            }}
-            onAddItem={(item) => {
-              store.updateMonthlyBudget(budget.id, {
-                incomeTargets: [...budget.incomeTargets, item],
-              });
-            }}
-            onDeleteItem={(itemId) => {
-              store.updateMonthlyBudget(budget.id, {
-                incomeTargets: budget.incomeTargets.filter((t) => t.id !== itemId),
-              });
-            }}
           />
 
           {/* Expense breakdown */}
