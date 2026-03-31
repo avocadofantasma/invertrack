@@ -13,6 +13,7 @@ import {
   Edit3,
   Trash2,
   X,
+  ChevronsUpDown,
 } from "lucide-react";
 import type { AccountSummary, InstitutionSummary, AlertType, Account, LimitType } from "@/lib/types";
 import { formatMoney, formatPercent, cn } from "@/lib/utils";
@@ -42,15 +43,31 @@ export function AccountsTable({ summaries, institutionSummaries }: Props) {
     });
   };
 
+  const allExpanded = expanded.size === institutionSummaries.length;
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpanded(new Set());
+    } else {
+      setExpanded(new Set(institutionSummaries.map((i) => i.institution)));
+    }
+  };
+
   return (
     <>
       <div className="glass-card overflow-hidden">
         <div className="p-4 border-b border-surface-300/30 flex items-center justify-between">
           <h3 className="section-title">Detalle por cuenta</h3>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-surface-500 font-mono">
               {summaries.length} sub-cuentas
             </span>
+            <button
+              onClick={toggleAll}
+              className="p-1.5 rounded-lg hover:bg-surface-300/50 transition-colors"
+              title={allExpanded ? "Colapsar todas" : "Expandir todas"}
+            >
+              <ChevronsUpDown className="w-4 h-4 text-surface-500" />
+            </button>
             <button
               onClick={() => {
                 setEditingAccount(null);

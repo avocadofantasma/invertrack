@@ -367,7 +367,7 @@ export function Dashboard() {
               accountId,
               date,
               type: diff > 0 ? "deposit" : "withdrawal",
-              amount: Math.abs(diff),
+              amount: diff,
               notes: "Ajuste de saldo",
             });
             toast.success("Ajuste registrado");
