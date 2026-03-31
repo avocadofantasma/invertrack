@@ -14,6 +14,9 @@ import {
   X,
   ChevronRight as ChevronRightSm,
   Check,
+  Search,
+  Link2,
+  Link2Off,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { formatMoney } from "@/lib/utils";
@@ -25,7 +28,7 @@ import {
   getCCSpendingByCategory,
 } from "@/lib/finance-utils";
 import { toast } from "sonner";
-import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement } from "@/lib/types";
+import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement, IncomeSource, FixedExpense, Loan } from "@/lib/types";
 import type { CCCategorySpending } from "@/lib/finance-utils";
 
 export function BudgetTab() {
@@ -39,6 +42,7 @@ export function BudgetTab() {
     creditCards,
     creditCardStatements,
     loanPayments,
+    loans,
   } = store;
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
@@ -147,11 +151,21 @@ export function BudgetTab() {
             totalCCSpending={netCCSpending}
           />
 
+          {/* Projection Pie */}
+          <BudgetProjectionPie
+            incomeSources={incomeSources}
+            fixedExpenses={fixedExpenses}
+            loans={loans}
+          />
+
           {/* Expense breakdown */}
           <BudgetSection
             title="Gastos fijos"
             items={budget.expenseLimits}
             type="expense"
+            creditCards={creditCards}
+            creditCardStatements={creditCardStatements}
+            selectedMonth={selectedMonth}
             onUpdateItem={(itemId, updates) => {
               const updatedLimits = budget.expenseLimits.map((t) =>
                 t.id === itemId ? { ...t, ...updates } : t
@@ -168,10 +182,17 @@ export function BudgetTab() {
                 expenseLimits: budget.expenseLimits.filter((t) => t.id !== itemId),
               });
             }}
-            onMarkCCPaid={(itemId, amount) => {
+            onMarkCCPaid={(itemId, amount, cardId, transactionId, transactionDesc) => {
               const updatedLimits = budget.expenseLimits.map((t) =>
                 t.id === itemId
-                  ? { ...t, paidViaCC: true, paidViaCCAmount: amount }
+                  ? {
+                      ...t,
+                      paidViaCC: true,
+                      paidViaCCAmount: amount,
+                      paidViaCCCardId: cardId,
+                      paidViaCCTransactionId: transactionId,
+                      paidViaCCTransactionDesc: transactionDesc,
+                    }
                   : t
               );
               store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
@@ -179,7 +200,14 @@ export function BudgetTab() {
             onUnmarkCCPaid={(itemId) => {
               const updatedLimits = budget.expenseLimits.map((t) =>
                 t.id === itemId
-                  ? { ...t, paidViaCC: false, paidViaCCAmount: undefined }
+                  ? {
+                      ...t,
+                      paidViaCC: false,
+                      paidViaCCAmount: undefined,
+                      paidViaCCCardId: undefined,
+                      paidViaCCTransactionId: undefined,
+                      paidViaCCTransactionDesc: undefined,
+                    }
                   : t
               );
               store.updateMonthlyBudget(budget.id, { expenseLimits: updatedLimits });
@@ -628,12 +656,129 @@ function CCSpendingSection({ items }: { items: CCCategorySpending[] }) {
   );
 }
 
+// ─── Budget Projection Pie ────────────────────────────────────────────────────
+
+const PIE_COLORS = {
+  personal: "#fb7185",   // rose-400
+  business: "#22d3ee",   // cyan-400
+  loans:    "#f97316",   // orange-400
+  surplus:  "#34d399",   // emerald-400
+};
+
+function BudgetProjectionPie({
+  incomeSources,
+  fixedExpenses,
+  loans,
+}: {
+  incomeSources: IncomeSource[];
+  fixedExpenses: FixedExpense[];
+  loans: Loan[];
+}) {
+  const totalIncome = incomeSources
+    .filter((s) => s.enabled)
+    .reduce((sum, s) => {
+      const times = s.timesPerMonth || (s.frequency === "biweekly" ? 2 : 1);
+      return sum + s.amount * times;
+    }, 0);
+
+  const personalTotal = fixedExpenses
+    .filter((e) => e.enabled && e.category === "personal")
+    .reduce((sum, e) => sum + e.expectedAmount, 0);
+
+  const businessTotal = fixedExpenses
+    .filter((e) => e.enabled && e.category === "business")
+    .reduce((sum, e) => sum + e.expectedAmount, 0);
+
+  const loansTotal = loans
+    .filter((l) => l.enabled)
+    .reduce((sum, l) => sum + l.monthlyPayment, 0);
+
+  const totalExpenses = personalTotal + businessTotal + loansTotal;
+  const surplus = Math.max(totalIncome - totalExpenses, 0);
+  const deficit = totalExpenses > totalIncome ? totalExpenses - totalIncome : 0;
+
+  const slices = [
+    { key: "personal", label: "G. Personales", value: personalTotal, color: PIE_COLORS.personal },
+    { key: "business", label: "G. Negocio",    value: businessTotal, color: PIE_COLORS.business },
+    { key: "loans",    label: "Préstamos",     value: loansTotal,    color: PIE_COLORS.loans    },
+    { key: "surplus",  label: "Disponible",    value: surplus,       color: PIE_COLORS.surplus  },
+  ].filter((s) => s.value > 0);
+
+  if (totalIncome === 0 && totalExpenses === 0) return null;
+
+  const pieTotal = slices.reduce((s, d) => s + d.value, 0) || 1;
+  const pctStr = (v: number) => `${Math.round((v / pieTotal) * 100)}%`;
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Target className="w-4 h-4 text-brand-400" />
+        <h3 className="section-title">Proyección mensual</h3>
+      </div>
+
+      <div className="flex items-center gap-6">
+        {/* Donut */}
+        <div className="relative shrink-0" style={{ width: 140, height: 140 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={slices}
+                dataKey="value"
+                cx="50%"
+                cy="50%"
+                innerRadius={42}
+                outerRadius={62}
+                startAngle={90}
+                endAngle={-270}
+                strokeWidth={0}
+              >
+                {slices.map((s) => (
+                  <Cell key={s.key} fill={s.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          {/* Centre label */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <p className="text-[9px] uppercase tracking-wider text-surface-500">Ingreso</p>
+            <p className="font-mono text-xs font-bold text-surface-900 leading-tight">
+              {formatMoney(totalIncome)}
+            </p>
+          </div>
+        </div>
+
+        {/* Legend + amounts */}
+        <div className="flex-1 space-y-2">
+          {slices.map((s) => (
+            <div key={s.key} className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+              <span className="text-xs text-surface-600 flex-1">{s.label}</span>
+              <span className="font-mono text-xs font-semibold text-surface-900">{formatMoney(s.value)}</span>
+              <span className="text-[10px] text-surface-500 w-8 text-right">{pctStr(s.value)}</span>
+            </div>
+          ))}
+          {deficit > 0 && (
+            <div className="mt-2 rounded-lg bg-rose-500/10 px-2.5 py-1.5">
+              <p className="text-[10px] text-rose-400 font-medium">
+                Déficit proyectado: {formatMoney(deficit)}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Budget section ───────────────────────────────────────────────────────────
 
 function BudgetSection({
   title,
   items,
   type,
+  creditCards,
+  creditCardStatements,
+  selectedMonth,
   onUpdateItem,
   onAddItem,
   onDeleteItem,
@@ -643,21 +788,50 @@ function BudgetSection({
   title: string;
   items: BudgetLineItem[];
   type: "income" | "expense";
+  creditCards?: CreditCardData[];
+  creditCardStatements?: CreditCardStatement[];
+  selectedMonth?: string;
   onUpdateItem: (id: string, updates: Partial<BudgetLineItem>) => void;
   onAddItem: (item: BudgetLineItem) => void;
   onDeleteItem: (id: string) => void;
-  onMarkCCPaid?: (id: string, amount: number) => void;
+  onMarkCCPaid?: (id: string, amount: number, cardId?: string, transactionId?: string, transactionDesc?: string) => void;
   onUnmarkCCPaid?: (id: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBudgeted, setNewBudgeted] = useState("");
   const [newCategory] = useState(type === "income" ? "salary" : "personal");
-  const [ccInputFor, setCCInputFor] = useState<string | null>(null);
-  const [ccInputAmount, setCCInputAmount] = useState("");
+  const [ccPickerFor, setCCPickerFor] = useState<string | null>(null);
+  const [ccSearch, setCCSearch] = useState("");
 
   const totalBudgeted = items.reduce((sum, i) => sum + i.budgeted, 0);
   const totalActual = items.reduce((sum, i) => sum + i.actual, 0);
+
+  // Build flat list of all transactions in the selected month across all CC statements
+  const allTransactions = useMemo(() => {
+    if (!creditCardStatements || !selectedMonth) return [];
+    return creditCardStatements
+      .filter((s) => s.month === selectedMonth)
+      .flatMap((s) =>
+        s.transactions.map((tx) => ({
+          ...tx,
+          cardId: s.cardId,
+          cardName: creditCards?.find((c) => c.id === s.cardId)?.name ?? s.cardId,
+          cardColor: creditCards?.find((c) => c.id === s.cardId)?.color ?? "#71717a",
+        }))
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [creditCardStatements, creditCards, selectedMonth]);
+
+  const filteredTransactions = useMemo(() => {
+    if (!ccSearch.trim()) return allTransactions;
+    const q = ccSearch.toLowerCase();
+    return allTransactions.filter(
+      (tx) =>
+        tx.description.toLowerCase().includes(q) ||
+        tx.cardName.toLowerCase().includes(q)
+    );
+  }, [allTransactions, ccSearch]);
 
   return (
     <div className="glass-card overflow-hidden">
@@ -735,12 +909,14 @@ function BudgetSection({
                   : "bg-amber-400";
 
           return (
-            <div key={item.id} className="px-4 py-3 hover:bg-surface-200/30 transition-colors">
-              <div className="flex items-center justify-between mb-1.5">
+            <div key={item.id} className="transition-colors">
+              {/* Main row */}
+              <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-200/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-sm font-medium text-surface-900 truncate">{item.name}</span>
                   {item.paidViaCC && (
-                    <span className="badge text-[10px] bg-violet-500/20 text-violet-300 border-violet-500/30 shrink-0">
+                    <span className="badge text-[10px] bg-violet-500/20 text-violet-300 border-violet-500/30 shrink-0 flex items-center gap-1">
+                      <Link2 className="w-2.5 h-2.5" />
                       TDC
                     </span>
                   )}
@@ -763,18 +939,18 @@ function BudgetSection({
                       <button
                         onClick={() => onUnmarkCCPaid(item.id)}
                         className="p-1 rounded hover:bg-violet-500/10"
-                        title="Quitar pago con TDC"
+                        title="Desligar cargo TDC"
                       >
-                        <CreditCard className="w-3 h-3 text-violet-400" />
+                        <Link2Off className="w-3 h-3 text-violet-400" />
                       </button>
                     ) : (
                       <button
                         onClick={() => {
-                          setCCInputFor(item.id);
-                          setCCInputAmount(String(item.budgeted));
+                          setCCPickerFor(ccPickerFor === item.id ? null : item.id);
+                          setCCSearch("");
                         }}
                         className="p-1 rounded hover:bg-violet-500/10"
-                        title="Marcar como pagado con TDC"
+                        title="Ligar a cargo de TDC"
                       >
                         <CreditCard className="w-3 h-3 text-surface-500 hover:text-violet-400 transition-colors" />
                       </button>
@@ -789,50 +965,90 @@ function BudgetSection({
                 </div>
               </div>
 
-              {/* CC amount input inline */}
-              {ccInputFor === item.id && (
-                <div className="mb-2 flex items-center gap-2 bg-violet-500/10 rounded-lg px-3 py-2">
-                  <CreditCard className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                  <span className="text-xs text-violet-300 shrink-0">Monto en TDC</span>
-                  <input
-                    type="number"
-                    value={ccInputAmount}
-                    onChange={(e) => setCCInputAmount(e.target.value)}
-                    className="input-field py-1 text-xs w-28"
-                    min="0"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => {
-                      const amount = parseFloat(ccInputAmount);
-                      if (!isNaN(amount) && amount > 0) {
-                        onMarkCCPaid?.(item.id, amount);
-                        setCCInputFor(null);
-                      }
-                    }}
-                    className="btn-primary py-1 px-2 text-xs"
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    onClick={() => setCCInputFor(null)}
-                    className="p-1 hover:text-surface-300 text-surface-500"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+              {/* Linked transaction info */}
+              {item.paidViaCC && item.paidViaCCTransactionDesc && (
+                <div className="mx-4 mb-2 -mt-1 flex items-center gap-1.5 text-[10px] text-violet-400">
+                  <Link2 className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{item.paidViaCCTransactionDesc}</span>
+                  <span className="shrink-0">· {formatMoney(item.paidViaCCAmount ?? 0)}</span>
                 </div>
               )}
 
-              <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${barColor} transition-all`}
-                  style={{ width: `${Math.min(pct, 100)}%` }}
-                />
+              {/* Progress bar */}
+              <div className="px-4 pb-3">
+                <div className="w-full h-1.5 bg-surface-300/50 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${barColor} transition-all`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+                {isOver && type === "expense" && !item.paidViaCC && (
+                  <p className="text-[10px] text-rose-400 mt-0.5">
+                    Excedido por {formatMoney(item.actual - item.budgeted)}
+                  </p>
+                )}
               </div>
-              {isOver && type === "expense" && !item.paidViaCC && (
-                <p className="text-[10px] text-rose-400 mt-0.5">
-                  Excedido por {formatMoney(item.actual - item.budgeted)}
-                </p>
+
+              {/* CC Transaction Picker */}
+              {ccPickerFor === item.id && (
+                <div className="mx-4 mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
+                  <div className="p-3 border-b border-violet-500/20 flex items-center gap-2">
+                    <CreditCard className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                    <span className="text-xs font-medium text-violet-300">Ligar a cargo de tarjeta</span>
+                    <button
+                      onClick={() => setCCPickerFor(null)}
+                      className="ml-auto p-0.5 text-surface-500 hover:text-surface-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {allTransactions.length === 0 ? (
+                    <p className="p-4 text-xs text-surface-500 text-center">
+                      No hay cargos de TDC en este mes
+                    </p>
+                  ) : (
+                    <>
+                      <div className="p-2 border-b border-violet-500/20 flex items-center gap-2">
+                        <Search className="w-3.5 h-3.5 text-surface-500 shrink-0" />
+                        <input
+                          autoFocus
+                          value={ccSearch}
+                          onChange={(e) => setCCSearch(e.target.value)}
+                          placeholder="Buscar cargo..."
+                          className="flex-1 bg-transparent text-xs text-surface-900 placeholder:text-surface-500 outline-none"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-violet-500/10">
+                        {filteredTransactions.map((tx) => (
+                          <button
+                            key={tx.id}
+                            onClick={() => {
+                              onMarkCCPaid?.(item.id, tx.amount, tx.cardId, tx.id, `${tx.cardName} · ${tx.description}`);
+                              setCCPickerFor(null);
+                              setCCSearch("");
+                            }}
+                            className="w-full px-3 py-2.5 hover:bg-violet-500/10 transition-colors text-left flex items-center gap-3"
+                          >
+                            <div
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: tx.cardColor }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-surface-900 truncate">{tx.description}</p>
+                              <p className="text-[10px] text-surface-500">{tx.cardName} · {tx.date}</p>
+                            </div>
+                            <span className="font-mono text-xs font-semibold text-rose-400 shrink-0">
+                              {formatMoney(tx.amount)}
+                            </span>
+                          </button>
+                        ))}
+                        {filteredTransactions.length === 0 && (
+                          <p className="p-3 text-xs text-surface-500 text-center">Sin resultados</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           );
