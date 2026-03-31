@@ -286,7 +286,7 @@ export function BudgetTab() {
 
           {/* Credit card spending breakdown */}
           {ccSpendingByCategory.length > 0 && (
-            <CCSpendingSection items={ccSpendingByCategory} />
+            <CCSpendingSection items={ccSpendingByCategory} expenseLimits={budget.expenseLimits} />
           )}
 
           {/* Delete budget */}
@@ -585,11 +585,26 @@ const CC_CATEGORY_LABELS: Record<string, string> = {
   other: "Otros",
 };
 
-function CCSpendingSection({ items }: { items: CCCategorySpending[] }) {
+function CCSpendingSection({ items, expenseLimits }: { items: CCCategorySpending[]; expenseLimits: BudgetLineItem[] }) {
   const [drawerCategory, setDrawerCategory] = useState<string | null>(null);
   const total = items.reduce((sum, i) => sum + i.total, 0);
   const max = items[0]?.total ?? 1;
   const drawerItem = items.find((i) => i.category === drawerCategory) ?? null;
+
+  // Build a map of transactionId → expense name for quick lookup
+  const txToExpense = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const limit of expenseLimits) {
+      for (const tx of limit.ccTransactions ?? []) {
+        map.set(tx.transactionId, limit.name);
+      }
+      // Legacy single-tx support
+      if (limit.paidViaCCTransactionId && !map.has(limit.paidViaCCTransactionId)) {
+        map.set(limit.paidViaCCTransactionId, limit.name);
+      }
+    }
+    return map;
+  }, [expenseLimits]);
 
   return (
     <>
@@ -688,27 +703,45 @@ function CCSpendingSection({ items }: { items: CCCategorySpending[] }) {
                 <div className="divide-y divide-surface-200/30">
                   {[...drawerItem.transactions]
                     .sort((a, b) => b.date.localeCompare(a.date))
-                    .map((tx) => (
-                      <div
-                        key={tx.id}
-                        className="px-5 py-3.5 flex items-center justify-between"
-                      >
-                        <div className="flex-1 min-w-0 pr-4">
-                          <p className="text-sm font-medium text-surface-900 truncate">
-                            {tx.description}
-                          </p>
-                          <p className="text-xs text-surface-500 mt-0.5">{tx.date}</p>
-                          {tx.installment && (
-                            <p className="text-[10px] text-violet-400 mt-0.5">
-                              MSI {tx.installment.current}/{tx.installment.total}
+                    .map((tx) => {
+                      const linkedExpense = txToExpense.get(tx.id);
+                      return (
+                        <div
+                          key={tx.id}
+                          className="px-5 py-3.5 flex items-center justify-between"
+                        >
+                          <div className="flex-1 min-w-0 pr-4">
+                            <p className="text-sm font-medium text-surface-900 truncate">
+                              {tx.description}
                             </p>
-                          )}
+                            <p className="text-xs text-surface-500 mt-0.5">{tx.date}</p>
+                            {tx.installment && (
+                              <p className="text-[10px] text-violet-400 mt-0.5">
+                                MSI {tx.installment.current}/{tx.installment.total}
+                              </p>
+                            )}
+                            {linkedExpense && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Link2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                                <span className="text-[10px] text-emerald-400 font-medium truncate">
+                                  {linkedExpense}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="font-mono text-sm font-semibold text-rose-400">
+                              {formatMoney(tx.amount)}
+                            </span>
+                            {linkedExpense && (
+                              <span className="badge text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                                ligado
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="font-mono text-sm font-semibold text-rose-400 shrink-0">
-                          {formatMoney(tx.amount)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             </motion.div>
@@ -866,6 +899,8 @@ function BudgetSection({
   const [newCategory] = useState(type === "income" ? "salary" : "personal");
   const [ccPickerFor, setCCPickerFor] = useState<string | null>(null);
   const [ccSearch, setCCSearch] = useState("");
+  const [ccFilterCard, setCCFilterCard] = useState<string | null>(null);
+  const [ccFilterCategory, setCCFilterCategory] = useState<string | null>(null);
 
   const totalBudgeted = items.reduce((sum, i) => sum + i.budgeted, 0);
   const totalActual = items.reduce((sum, i) => sum + i.actual, 0);
@@ -979,17 +1014,29 @@ function BudgetSection({
                   ? "bg-rose-400"
                   : "bg-amber-400";
 
-          // Picker: filter out already-linked transactions, then apply search
+          // Picker: filter out already-linked transactions, then apply search + chips
           const availableTransactions = allTransactions.filter(
             (tx) => !linkedIds.has(tx.id)
           );
-          const filteredAvailable = ccSearch.trim()
-            ? availableTransactions.filter(
-                (tx) =>
-                  tx.description.toLowerCase().includes(ccSearch.toLowerCase()) ||
-                  tx.cardName.toLowerCase().includes(ccSearch.toLowerCase())
-              )
-            : availableTransactions;
+          // Unique cards & categories for filter chips
+          const pickerCards = Array.from(
+            new Map(availableTransactions.map((tx) => [tx.cardId, { id: tx.cardId, name: tx.cardName, color: tx.cardColor }])).values()
+          );
+          const pickerCategories = Array.from(
+            new Set(availableTransactions.map((tx) => tx.category).filter(Boolean))
+          ) as string[];
+          const filteredAvailable = availableTransactions.filter((tx) => {
+            const matchesSearch =
+              !ccSearch.trim() ||
+              tx.description.toLowerCase().includes(ccSearch.toLowerCase()) ||
+              tx.cardName.toLowerCase().includes(ccSearch.toLowerCase());
+            const chipActive = ccFilterCard || ccFilterCategory;
+            const matchesChip =
+              !chipActive ||
+              (ccFilterCard ? tx.cardId === ccFilterCard : false) ||
+              (ccFilterCategory ? tx.category === ccFilterCategory : false);
+            return matchesSearch && matchesChip;
+          });
 
           return (
             <div key={item.id} className="transition-colors">
@@ -1032,6 +1079,8 @@ function BudgetSection({
                         onClick={() => {
                           setCCPickerFor(ccPickerFor === item.id ? null : item.id);
                           setCCSearch("");
+                          setCCFilterCard(null);
+                          setCCFilterCategory(null);
                         }}
                         className="p-1 rounded hover:bg-violet-500/10"
                         title="Ligar cargo de TDC"
@@ -1131,7 +1180,46 @@ function BudgetSection({
                           placeholder="Buscar cargo..."
                           className="flex-1 bg-transparent text-xs text-surface-900 placeholder:text-surface-500 outline-none"
                         />
+                        {ccSearch && (
+                          <button onClick={() => setCCSearch("")} className="text-surface-500 hover:text-surface-300">
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
+                      {(pickerCards.length > 1 || pickerCategories.length > 0) && (
+                        <div className="px-2 py-1.5 border-b border-violet-500/20 flex flex-wrap gap-1">
+                          {pickerCards.map((card) => (
+                            <button
+                              key={card.id}
+                              onClick={() => setCCFilterCard(ccFilterCard === card.id ? null : card.id)}
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                                ccFilterCard === card.id
+                                  ? "bg-violet-500/30 border-violet-400 text-violet-200"
+                                  : "bg-surface-300/20 border-surface-400/30 text-surface-500 hover:border-violet-400/50"
+                              }`}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: card.color }}
+                              />
+                              {card.name}
+                            </button>
+                          ))}
+                          {pickerCategories.map((cat) => (
+                            <button
+                              key={cat}
+                              onClick={() => setCCFilterCategory(ccFilterCategory === cat ? null : cat)}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                                ccFilterCategory === cat
+                                  ? "bg-violet-500/30 border-violet-400 text-violet-200"
+                                  : "bg-surface-300/20 border-surface-400/30 text-surface-500 hover:border-violet-400/50"
+                              }`}
+                            >
+                              {CC_CATEGORY_LABELS[cat] ?? cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-violet-500/10">
                         {filteredAvailable.map((tx) => (
                           <button
@@ -1139,7 +1227,7 @@ function BudgetSection({
                             onClick={() => {
                               onMarkCCPaid?.(item.id, tx.amount, tx.cardId, tx.id, `${tx.cardName} · ${tx.description}`);
                               setCCSearch("");
-                              // Keep picker open to add more
+                              // Keep picker open, keep chips active to add more
                             }}
                             className="w-full px-3 py-2.5 hover:bg-violet-500/10 transition-colors text-left flex items-center gap-3"
                           >
