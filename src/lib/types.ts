@@ -188,6 +188,7 @@ export interface CreditCardStatement {
   paidAmount?: number;
   paidDate?: string;
   paidFromAccountId?: string; // account the CC payment came from
+  paymentMovementId?: string; // movement ID created when marking as paid (for undo)
 }
 
 export interface Loan {

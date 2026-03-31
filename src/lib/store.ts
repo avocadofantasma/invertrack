@@ -45,7 +45,7 @@ export interface Store extends AppState {
   deleteAccount: (id: string) => void;
 
   // Movement actions
-  addMovement: (movement: Omit<Movement, "id">) => void;
+  addMovement: (movement: Omit<Movement, "id"> & { id?: string }) => void;
   updateMovement: (id: string, updates: Partial<Movement>) => void;
   deleteMovement: (id: string) => void;
 
@@ -188,7 +188,7 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   addMovement: (movement) => {
-    const newMovement: Movement = { ...movement, id: generateId() };
+    const newMovement: Movement = { ...movement, id: movement.id ?? generateId() };
     update(set, (state) => ({ movements: [...state.movements, newMovement] }));
   },
 

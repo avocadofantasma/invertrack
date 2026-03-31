@@ -205,14 +205,6 @@ export function BudgetTab() {
             creditCards={creditCards}
             creditCardStatements={creditCardStatements}
             selectedMonth={selectedMonth}
-            onMarkPaid={(statementId, balance) => {
-              store.updateCreditCardStatement(statementId, {
-                paid: true,
-                paidDate: new Date().toISOString().split("T")[0],
-                paidAmount: balance,
-              });
-              toast.success("Tarjeta marcada como pagada");
-            }}
           />
 
           {/* Credit card spending breakdown */}
@@ -440,12 +432,10 @@ function CCPaymentStatusSection({
   creditCards,
   creditCardStatements,
   selectedMonth,
-  onMarkPaid,
 }: {
   creditCards: CreditCardData[];
   creditCardStatements: CreditCardStatement[];
   selectedMonth: string;
-  onMarkPaid: (statementId: string, balance: number) => void;
 }) {
   const monthStatements = creditCardStatements.filter(
     (s) => s.month === selectedMonth
@@ -454,13 +444,20 @@ function CCPaymentStatusSection({
 
   return (
     <div className="glass-card overflow-hidden">
-      <div className="p-4 border-b border-surface-300/30 flex items-center gap-2">
-        <CreditCard className="w-4 h-4 text-violet-400" />
-        <h3 className="section-title">Pago de tarjetas — {selectedMonth}</h3>
+      <div className="p-4 border-b border-surface-300/30 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CreditCard className="w-4 h-4 text-violet-400" />
+          <h3 className="section-title">Tarjetas de crédito — {selectedMonth}</h3>
+        </div>
+        <p className="text-[11px] text-surface-500">Paga en Egresos → Deudas</p>
       </div>
       <div className="divide-y divide-surface-200/50">
         {monthStatements.map((stmt) => {
           const card = creditCards.find((c) => c.id === stmt.cardId);
+          const isPartial =
+            stmt.paid &&
+            stmt.paidAmount !== undefined &&
+            stmt.paidAmount < stmt.totalBalance;
           return (
             <div key={stmt.id} className="flex items-center gap-4 px-4 py-3">
               <div
@@ -472,6 +469,11 @@ function CCPaymentStatusSection({
                 <p className="text-xs text-surface-500">
                   Vence: {stmt.dueDate} · Mín: {formatMoney(stmt.minimumPayment)}
                 </p>
+                {isPartial && (
+                  <p className="text-[11px] text-amber-400">
+                    Pago parcial: {formatMoney(stmt.paidAmount!)} · Restante: {formatMoney(stmt.totalBalance - stmt.paidAmount!)}
+                  </p>
+                )}
               </div>
               <p className="font-mono text-sm font-semibold text-surface-900 shrink-0">
                 {formatMoney(stmt.totalBalance)}
@@ -479,16 +481,12 @@ function CCPaymentStatusSection({
               {stmt.paid ? (
                 <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 shrink-0">
                   <Check className="w-3 h-3" />
-                  Pagada {stmt.paidDate ? `(${stmt.paidDate})` : ""}
+                  {isPartial ? "Parcial" : "Pagada"}
                 </span>
               ) : (
-                <button
-                  onClick={() => onMarkPaid(stmt.id, stmt.totalBalance)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-surface-200/50 text-surface-600 hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors shrink-0"
-                >
-                  <Check className="w-3 h-3" />
-                  Marcar pagada
-                </button>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 shrink-0">
+                  Pendiente
+                </span>
               )}
             </div>
           );
