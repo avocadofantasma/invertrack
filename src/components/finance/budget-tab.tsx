@@ -406,7 +406,7 @@ function BudgetOverview({
 
   return (
     <div className="glass-card p-5 space-y-5">
-      <div className="grid grid-cols-3 gap-2 items-center">
+      <div className="grid grid-cols-3 gap-1 sm:gap-2 items-center">
         {/* Income gauge */}
         <div className="flex flex-col items-center gap-1">
           <DonutGauge
@@ -427,7 +427,7 @@ function BudgetOverview({
             Balance disponible
           </p>
           <p
-            className={`font-mono text-2xl font-bold leading-none ${
+            className={`font-mono text-xl sm:text-2xl font-bold leading-none ${
               balance >= 0 ? "text-emerald-400" : "text-rose-400"
             }`}
           >
@@ -968,20 +968,20 @@ function FinanceProjectionChart({
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 divide-x divide-surface-300/30 border-b border-surface-300/30">
-        <div className="p-3 text-center">
-          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Ahorro acumulado</p>
+        <div className="p-2 sm:p-3 text-center">
+          <p className="text-[9px] sm:text-[10px] text-surface-500 uppercase tracking-wider">Ahorro acumulado</p>
           <p className={`font-mono text-sm font-bold mt-0.5 ${last?.accumulated >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
             {formatMoney(last?.accumulated ?? 0)}
           </p>
         </div>
-        <div className="p-3 text-center">
-          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Promedio mensual</p>
+        <div className="p-2 sm:p-3 text-center">
+          <p className="text-[9px] sm:text-[10px] text-surface-500 uppercase tracking-wider">Promedio mensual</p>
           <p className={`font-mono text-sm font-bold mt-0.5 ${avgSurplus >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
             {formatMoney(avgSurplus)}
           </p>
         </div>
-        <div className="p-3 text-center">
-          <p className="text-[10px] text-surface-500 uppercase tracking-wider">Se saldan</p>
+        <div className="p-2 sm:p-3 text-center">
+          <p className="text-[9px] sm:text-[10px] text-surface-500 uppercase tracking-wider">Se saldan</p>
           <p className="font-mono text-sm font-bold mt-0.5 text-amber-400">
             {loansPayingOff + msiFinishing > 0 ? `${loansPayingOff + msiFinishing} compromisos` : "—"}
           </p>

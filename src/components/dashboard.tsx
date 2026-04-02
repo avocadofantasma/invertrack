@@ -230,7 +230,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* Settings override */}
         {showSettings && <DataManager />}
 
@@ -428,7 +428,7 @@ function DineroResumen({
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Hero stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           label="Total en cuentas"
           value={formatMoney(totalBalance)}
@@ -568,7 +568,7 @@ function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-card p-5 bg-gradient-to-br ${gradient} relative overflow-hidden`}
+      className={`glass-card p-4 sm:p-5 bg-gradient-to-br ${gradient} relative overflow-hidden`}
     >
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-3">

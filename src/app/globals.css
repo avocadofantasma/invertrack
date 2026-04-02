@@ -54,7 +54,7 @@
   }
 
   .stat-value {
-    @apply font-mono text-2xl font-semibold tracking-tight;
+    @apply font-mono text-xl sm:text-2xl font-semibold tracking-tight;
   }
 
   .stat-label {
@@ -116,7 +116,7 @@
   }
 
   .section-title {
-    @apply font-display text-lg font-bold text-surface-900 tracking-tight;
+    @apply font-display text-base sm:text-lg font-bold text-surface-900 tracking-tight;
   }
 }
 

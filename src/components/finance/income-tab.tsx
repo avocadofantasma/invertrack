@@ -46,7 +46,7 @@ export function IncomeTab() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="glass-card p-5 bg-gradient-to-br from-emerald-500/10 to-cyan-500/5">
           <p className="stat-label">Ingreso mensual configurado</p>
           <p className="stat-value text-surface-950 mt-2">{formatMoney(totalConfigured)}</p>
@@ -274,7 +274,7 @@ function IncomeSourceForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Nombre</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder="Ej: Salario principal" required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Tipo</label>
               <select value={type} onChange={(e) => setType(e.target.value as IncomeCategory)} className="input-field">
@@ -292,7 +292,7 @@ function IncomeSourceForm({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Monto por pago</label>
               <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="input-field" placeholder="0" min="0" step="0.01" required />
@@ -396,7 +396,7 @@ function IncomeEntryForm({
               </select>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Fecha</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" required />

@@ -67,7 +67,7 @@ export function ExpensesTab() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="glass-card p-5 bg-gradient-to-br from-rose-500/10 to-orange-500/5">
           <p className="stat-label">Gastos personales/mes</p>
           <p className="stat-value text-surface-950 mt-2">{formatMoney(totalPersonal)}</p>
@@ -311,7 +311,7 @@ function FixedExpenseForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Nombre</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder="Ej: Electricidad, Nómina Juan" required />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Categoría</label>
               <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)} className="input-field">
@@ -331,7 +331,7 @@ function FixedExpenseForm({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Día de vencimiento</label>
               <input type="number" value={dueDay} onChange={(e) => setDueDay(e.target.value)} className="input-field" placeholder="15" min="1" max="31" />
@@ -419,7 +419,7 @@ function ExpenseEntryForm({
               </select>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Fecha</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" required />

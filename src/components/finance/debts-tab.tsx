@@ -612,7 +612,7 @@ function LoansSection() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="glass-card p-5 bg-gradient-to-br from-orange-500/10 to-amber-500/5">
           <p className="stat-label">Deuda total préstamos</p>
           <p className="stat-value text-surface-950 mt-2">{formatMoney(totalDebt)}</p>
@@ -852,7 +852,7 @@ function CreditCardForm({
       >
         <h3 className="section-title mb-4">{card ? "Editar tarjeta" : "Nueva tarjeta"}</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Nombre</label>
               <input value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder="Ej: Oro BBVA" required />
@@ -866,7 +866,7 @@ function CreditCardForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Límite de crédito</label>
             <input type="number" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} className="input-field" placeholder="50000" min="0" step="0.01" required />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Día de corte</label>
               <input type="number" value={cutDay} onChange={(e) => setCutDay(e.target.value)} className="input-field" min="1" max="31" required />
@@ -937,7 +937,7 @@ function ManualStatementForm({
             <label className="text-xs font-medium text-surface-600 mb-1 block">Mes</label>
             <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Saldo total</label>
               <input type="number" value={totalBalance} onChange={(e) => setTotalBalance(e.target.value)} className="input-field" min="0" step="0.01" required />
@@ -947,7 +947,7 @@ function ManualStatementForm({
               <input type="number" value={minimumPayment} onChange={(e) => setMinimumPayment(e.target.value)} className="input-field" min="0" step="0.01" required />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Fecha de corte</label>
               <input type="date" value={cutDate} onChange={(e) => setCutDate(e.target.value)} className="input-field" />
@@ -1344,7 +1344,7 @@ function LoanForm({
       >
         <h3 className="section-title mb-4">{loan ? "Editar préstamo" : "Nuevo préstamo"}</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Nombre</label>
               <input value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder="Ej: Auto Nissan" required />
@@ -1354,7 +1354,7 @@ function LoanForm({
               <input value={institution} onChange={(e) => setInstitution(e.target.value)} className="input-field" placeholder="Ej: BBVA" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Tipo</label>
               <select value={type} onChange={(e) => setType(e.target.value as typeof type)} className="input-field">
@@ -1368,7 +1368,7 @@ function LoanForm({
               <input type="number" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className="input-field" min="0" step="0.01" required />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Saldo restante</label>
               <input type="number" value={remainingBalance} onChange={(e) => setRemainingBalance(e.target.value)} className="input-field" min="0" step="0.01" placeholder={totalAmount} />
@@ -1378,7 +1378,7 @@ function LoanForm({
               <input type="number" value={monthlyPayment} onChange={(e) => setMonthlyPayment(e.target.value)} className="input-field" min="0" step="0.01" required />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Tasa anual %</label>
               <input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} className="input-field" min="0" step="0.01" />
@@ -1392,7 +1392,7 @@ function LoanForm({
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="input-field h-[42px] p-1" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Inicio</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-field" />
@@ -1469,7 +1469,7 @@ function LoanPaymentForm({
       >
         <h3 className="section-title mb-4">Registrar pago — {loan.name}</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Fecha</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" required />

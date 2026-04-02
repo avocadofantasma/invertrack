@@ -85,17 +85,17 @@ export function AccountsTable({ summaries, institutionSummaries }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-surface-200/50 text-surface-600">
-                <th className="text-left px-4 py-3 font-medium sticky left-0 bg-surface-200/50 min-w-[200px]">
+                <th className="text-left px-3 sm:px-4 py-3 font-medium sticky left-0 bg-surface-200/50 min-w-[160px] sm:min-w-[200px]">
                   Cuenta
                 </th>
                 <th className="text-right px-3 py-3 font-medium">Saldo</th>
-                <th className="text-right px-3 py-3 font-medium">Tasa</th>
-                <th className="text-right px-3 py-3 font-medium">Tasa Efectiva</th>
-                <th className="text-center px-3 py-3 font-medium">Límite</th>
+                <th className="text-right px-3 py-3 font-medium hidden sm:table-cell">Tasa</th>
+                <th className="text-right px-3 py-3 font-medium hidden md:table-cell">Tasa Efectiva</th>
+                <th className="text-center px-3 py-3 font-medium hidden md:table-cell">Límite</th>
                 <th className="text-center px-3 py-3 font-medium">Estado</th>
                 <th className="text-right px-3 py-3 font-medium">Rend/Mes</th>
-                <th className="text-right px-3 py-3 font-medium">Proy 6M</th>
-                <th className="text-right px-3 py-3 font-medium">Proy 12M</th>
+                <th className="text-right px-3 py-3 font-medium hidden sm:table-cell">Proy 6M</th>
+                <th className="text-right px-3 py-3 font-medium hidden sm:table-cell">Proy 12M</th>
                 <th className="px-3 py-3" />
               </tr>
             </thead>
@@ -119,7 +119,7 @@ export function AccountsTable({ summaries, institutionSummaries }: Props) {
             </tbody>
             <tfoot>
               <tr className="bg-surface-200/80 font-semibold">
-                <td className="px-4 py-3 sticky left-0 bg-surface-200/80 text-surface-900">
+                <td className="px-3 py-3 sticky left-0 bg-surface-200/80 text-surface-900">
                   Total General
                 </td>
                 <td className="text-right px-3 py-3 font-mono text-surface-950">
@@ -127,8 +127,8 @@ export function AccountsTable({ summaries, institutionSummaries }: Props) {
                     summaries.reduce((s, a) => s + a.currentBalance, 0)
                   )}
                 </td>
-                <td className="px-3 py-3" />
-                <td className="text-right px-3 py-3 font-mono text-surface-800">
+                <td className="px-3 py-3 hidden sm:table-cell" />
+                <td className="text-right px-3 py-3 font-mono text-surface-800 hidden md:table-cell">
                   {formatPercent(
                     summaries.reduce((s, a) => s + a.currentBalance, 0) > 0
                       ? summaries.reduce(
@@ -139,15 +139,15 @@ export function AccountsTable({ summaries, institutionSummaries }: Props) {
                       : 0
                   )}
                 </td>
-                <td className="px-3 py-3" />
+                <td className="px-3 py-3 hidden md:table-cell" />
                 <td className="px-3 py-3" />
                 <td className="text-right px-3 py-3 font-mono text-accent-emerald">
                   {formatMoney(summaries.reduce((s, a) => s + a.monthlyReturn, 0))}
                 </td>
-                <td className="text-right px-3 py-3 font-mono text-surface-800">
+                <td className="text-right px-3 py-3 font-mono text-surface-800 hidden sm:table-cell">
                   {formatMoney(summaries.reduce((s, a) => s + a.projection6m, 0))}
                 </td>
-                <td className="text-right px-3 py-3 font-mono text-surface-800">
+                <td className="text-right px-3 py-3 font-mono text-surface-800 hidden sm:table-cell">
                   {formatMoney(
                     summaries.reduce((s, a) => s + a.projection12m, 0)
                   )}
@@ -201,23 +201,23 @@ function InstitutionGroup({
         onClick={onToggle}
         className="cursor-pointer hover:bg-surface-200/40 transition-colors border-b border-surface-200/50"
       >
-        <td className="px-4 py-3 sticky left-0 bg-surface-100/80">
-          <div className="flex items-center gap-3">
+        <td className="px-3 sm:px-4 py-3 sticky left-0 bg-surface-100/80">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div
-              className="w-1 h-8 rounded-full"
+              className="w-1 h-8 rounded-full shrink-0"
               style={{ backgroundColor: color }}
             />
-            <button className="text-surface-500">
+            <button className="text-surface-500 shrink-0">
               {isExpanded ? (
                 <ChevronDown className="w-4 h-4" />
               ) : (
                 <ChevronRight className="w-4 h-4" />
               )}
             </button>
-            <span className="font-semibold text-surface-950">
+            <span className="font-semibold text-surface-950 truncate">
               {institution.institution}
             </span>
-            <span className="text-xs text-surface-500">
+            <span className="text-xs text-surface-500 hidden sm:inline shrink-0">
               {institution.accounts.length} cuenta
               {institution.accounts.length > 1 ? "s" : ""}
             </span>
@@ -226,19 +226,19 @@ function InstitutionGroup({
         <td className="text-right px-3 py-3 font-mono font-semibold text-surface-950">
           {formatMoney(institution.totalBalance)}
         </td>
-        <td className="px-3 py-3" />
-        <td className="text-right px-3 py-3 font-mono text-surface-700">
+        <td className="px-3 py-3 hidden sm:table-cell" />
+        <td className="text-right px-3 py-3 font-mono text-surface-700 hidden md:table-cell">
           {formatPercent(institution.weightedRate)}
         </td>
-        <td className="px-3 py-3" />
+        <td className="px-3 py-3 hidden md:table-cell" />
         <td className="px-3 py-3" />
         <td className="text-right px-3 py-3 font-mono text-accent-emerald">
           {formatMoney(institution.monthlyReturn)}
         </td>
-        <td className="text-right px-3 py-3 font-mono text-surface-700">
+        <td className="text-right px-3 py-3 font-mono text-surface-700 hidden sm:table-cell">
           {formatMoney(institution.projection6m)}
         </td>
-        <td className="text-right px-3 py-3 font-mono text-surface-700">
+        <td className="text-right px-3 py-3 font-mono text-surface-700 hidden sm:table-cell">
           {formatMoney(institution.projection12m)}
         </td>
         <td className="px-3 py-3" />
@@ -255,17 +255,17 @@ function InstitutionGroup({
               exit={{ opacity: 0, height: 0 }}
               className="table-row group"
             >
-              <td className="px-4 py-2.5 sticky left-0 bg-surface-100/80">
-                <div className="flex items-center gap-3 pl-10">
+              <td className="px-3 sm:px-4 py-2.5 sticky left-0 bg-surface-100/80">
+                <div className="flex items-center gap-2 sm:gap-3 pl-7 sm:pl-10">
                   <div
-                    className="w-2 h-2 rounded-full"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: summary.account.color }}
                   />
-                  <span className="text-surface-800">
+                  <span className="text-surface-800 truncate">
                     {summary.account.subAccount}
                   </span>
                   {summary.account.isVariable && (
-                    <span className="badge badge-info text-[10px]">
+                    <span className="badge badge-info text-[10px] hidden sm:inline-flex">
                       <TrendingUp className="w-3 h-3" />
                       {summary.account.ticker}
                     </span>
@@ -275,17 +275,17 @@ function InstitutionGroup({
               <td className="text-right px-3 py-2.5 font-mono text-surface-900">
                 {formatMoney(summary.currentBalance)}
               </td>
-              <td className="text-right px-3 py-2.5 font-mono text-surface-600">
+              <td className="text-right px-3 py-2.5 font-mono text-surface-600 hidden sm:table-cell">
                 {summary.account.isVariable
                   ? "Variable"
                   : formatPercent(summary.nominalRate ?? 0)}
               </td>
-              <td className="text-right px-3 py-2.5 font-mono text-surface-800">
+              <td className="text-right px-3 py-2.5 font-mono text-surface-800 hidden md:table-cell">
                 {summary.effectiveRate > 0
                   ? formatPercent(summary.effectiveRate)
                   : "—"}
               </td>
-              <td className="text-center px-3 py-2.5">
+              <td className="text-center px-3 py-2.5 hidden md:table-cell">
                 <LimitIndicator summary={summary} />
               </td>
               <td className="text-center px-3 py-2.5">
@@ -296,14 +296,14 @@ function InstitutionGroup({
                   ? formatMoney(summary.monthlyReturn)
                   : "—"}
               </td>
-              <td className="text-right px-3 py-2.5 font-mono text-surface-700">
+              <td className="text-right px-3 py-2.5 font-mono text-surface-700 hidden sm:table-cell">
                 {formatMoney(summary.projection6m)}
               </td>
-              <td className="text-right px-3 py-2.5 font-mono text-surface-700">
+              <td className="text-right px-3 py-2.5 font-mono text-surface-700 hidden sm:table-cell">
                 {formatMoney(summary.projection12m)}
               </td>
               <td className="px-3 py-2.5">
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => { e.stopPropagation(); onEdit(summary.account); }}
                     className="p-1.5 rounded-lg hover:bg-surface-300/50 transition-colors"
@@ -462,7 +462,7 @@ function AccountFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Institución</label>
               <input value={institution} onChange={(e) => setInstitution(e.target.value)} className="input-field" placeholder="Nu, GBM+, Bitso..." required />
@@ -473,7 +473,7 @@ function AccountFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Tipo</label>
               <select value={type} onChange={(e) => setType(e.target.value)} className="input-field">
@@ -494,7 +494,7 @@ function AccountFormModal({
           </div>
 
           {isVariable ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="text-xs font-medium text-surface-600 mb-1 block">Ticker</label>
                 <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} className="input-field" placeholder="VOO, BTC..." />
@@ -515,7 +515,7 @@ function AccountFormModal({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="text-xs font-medium text-surface-600 mb-1 block">Tipo de límite</label>
               <select value={limitType} onChange={(e) => setLimitType(e.target.value as LimitType)} className="input-field">
