@@ -594,12 +594,16 @@ function CCPaymentStatusSection({
 // ─── CC Section with drawer ───────────────────────────────────────────────────
 
 const CC_CATEGORY_LABELS: Record<string, string> = {
+  despensa: "Despensa",
   food: "Comida",
-  health: "Salud",
-  shopping: "Compras",
-  entertainment: "Entretenimiento",
+  cine: "Cine",
+  suscripciones: "Suscripciones",
   transport: "Transporte",
+  entertainment: "Entretenimiento",
+  shopping: "Compras",
   services: "Servicios",
+  health: "Salud",
+  education: "Educación",
   other: "Otros",
 };
 
@@ -1153,13 +1157,34 @@ function BudgetProjectionPie({
               <span className="text-[10px] text-surface-500 w-8 text-right">{pctStr(s.value)}</span>
             </div>
           ))}
-          {deficit > 0 && (
-            <div className="mt-2 rounded-lg bg-rose-500/10 px-2.5 py-1.5">
+
+          {/* Combined totals divider */}
+          <div className="border-t border-surface-300/30 pt-2 mt-1 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-400" />
+              <span className="text-xs text-surface-600 flex-1">Ingreso total</span>
+              <span className="font-mono text-xs font-semibold text-emerald-400">{formatMoney(totalIncome)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-rose-400" />
+              <span className="text-xs text-surface-600 flex-1">Gastos totales</span>
+              <span className="font-mono text-xs font-semibold text-rose-400">{formatMoney(totalExpenses)}</span>
+            </div>
+          </div>
+
+          {deficit > 0 ? (
+            <div className="rounded-lg bg-rose-500/10 px-2.5 py-1.5">
               <p className="text-[10px] text-rose-400 font-medium">
-                Déficit proyectado: {formatMoney(deficit)}
+                Déficit: {formatMoney(deficit)}
               </p>
             </div>
-          )}
+          ) : surplus > 0 ? (
+            <div className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5">
+              <p className="text-[10px] text-emerald-400 font-medium">
+                Disponible: {formatMoney(surplus)}
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

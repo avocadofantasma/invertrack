@@ -41,7 +41,7 @@ Return ONLY valid JSON with this exact structure (no markdown, no code blocks):
       "date": "YYYY-MM-DD",
       "description": "Store name or description",
       "amount": 123.45,
-      "category": "food|transport|entertainment|shopping|services|health|education|other",
+      "category": "despensa|food|cine|suscripciones|transport|entertainment|shopping|services|health|education|other",
       "installment": {
         "current": 7,
         "total": 12,
@@ -56,7 +56,18 @@ Rules:
 - Dates must be valid ISO format
 - If you cannot determine a field, use null
 - Extract ALL transactions visible in the statement
-- Categories should be one of: food, transport, entertainment, shopping, services, health, education, other
+- Categories must be one of: despensa, food, cine, suscripciones, transport, entertainment, shopping, services, health, education, other
+  - despensa: supermarkets and grocery stores (Walmart, Soriana, Chedraui, La Comer, Costco, Sam's, etc.)
+  - food: restaurants, fast food, cafes, food delivery apps
+  - cine: movie theaters (Cinépolis, Cinemex)
+  - suscripciones: recurring subscription platforms (Netflix, Spotify, Disney+, HBO Max, Apple TV, YouTube Premium, Amazon Prime, Duolingo, iCloud, etc.)
+  - transport: gas stations, Uber/DiDi/Cabify, AMEX tolls, parking
+  - entertainment: other entertainment not covered by cine (concerts, gaming, events)
+  - shopping: retail, clothing, electronics, home goods, marketplace orders
+  - services: insurance (GNP, AXA), utilities, phone/internet bills, bank fees
+  - health: pharmacies (Farmacias del Ahorro, Benavides), hospitals, doctors, gyms
+  - education: schools, courses, books
+  - other: anything else
 - Currency is MXN (Mexican pesos)
 - For installment payments (MSI / meses sin intereses / "cargo X de Y"), include the installment field with:
   - current: the current installment number
