@@ -17,7 +17,7 @@ import {
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import type { FixedExpense, ExpenseEntry, ExpenseCategory, Account } from "@/lib/types";
+import type { FixedExpense, ExpenseEntry, ExpenseCategory, Account, Movement, InitialBalance } from "@/lib/types";
 
 const EXPENSE_ICONS: Record<string, typeof Zap> = {
   Electricidad: Zap,
@@ -39,7 +39,7 @@ function getExpenseIcon(name: string) {
 
 export function ExpensesTab() {
   const store = useStore();
-  const { fixedExpenses, expenseEntries, accounts } = store;
+  const { fixedExpenses, expenseEntries, accounts, movements, initialBalances } = store;
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<FixedExpense | null>(null);
@@ -242,6 +242,8 @@ export function ExpensesTab() {
         <ExpenseEntryForm
           fixedExpenses={fixedExpenses}
           accounts={accounts}
+          movements={movements}
+          initialBalances={initialBalances}
           onClose={() => setShowEntryForm(false)}
           onSave={(entry, withdrawAccountId) => {
             store.addExpenseEntry(entry);
@@ -358,11 +360,15 @@ function FixedExpenseForm({
 function ExpenseEntryForm({
   fixedExpenses,
   accounts,
+  movements,
+  initialBalances,
   onClose,
   onSave,
 }: {
   fixedExpenses: FixedExpense[];
   accounts: Account[];
+  movements: Movement[];
+  initialBalances: InitialBalance[];
   onClose: () => void;
   onSave: (entry: Omit<ExpenseEntry, "id">, withdrawAccountId?: string) => void;
 }) {
@@ -372,6 +378,16 @@ function ExpenseEntryForm({
   const [category, setCategory] = useState("personal");
   const [description, setDescription] = useState("");
   const [accountId, setAccountId] = useState("");
+
+  const selectedAccountBalance = accountId
+    ? (() => {
+        const initial = initialBalances.find((ib) => ib.accountId === accountId)?.balance ?? 0;
+        const total = movements
+          .filter((m) => m.accountId === accountId)
+          .reduce((sum, m) => sum + m.amount, 0);
+        return initial + total;
+      })()
+    : null;
 
   const handleFixedChange = (id: string) => {
     setFixedExpenseId(id);
@@ -453,9 +469,10 @@ function ExpenseEntryForm({
                   </option>
                 ))}
               </select>
-              {accountId && (
-                <p className="text-[11px] text-amber-400 mt-1">
-                  Se registrará un retiro automático en la cuenta seleccionada.
+              {accountId && selectedAccountBalance !== null && (
+                <p className="text-[11px] text-surface-500 mt-1">
+                  Disponible: <span className={selectedAccountBalance < 0 ? "text-rose-400" : "text-cyan-400"}>{formatMoney(selectedAccountBalance)}</span>
+                  {" · "}Se registrará un retiro automático.
                 </p>
               )}
             </div>

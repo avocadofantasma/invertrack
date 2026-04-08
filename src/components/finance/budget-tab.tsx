@@ -30,7 +30,7 @@ import {
   getCCSpendingByCategory,
 } from "@/lib/finance-utils";
 import { toast } from "sonner";
-import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement, IncomeSource, FixedExpense, Loan, CCLinkedTransaction } from "@/lib/types";
+import type { MonthlyBudget, BudgetLineItem, CreditCard as CreditCardData, CreditCardStatement, IncomeSource, FixedExpense, Loan, CCLinkedTransaction, ExpenseEntry } from "@/lib/types";
 import type { CCCategorySpending } from "@/lib/finance-utils";
 
 export function BudgetTab() {
@@ -149,6 +149,18 @@ export function BudgetTab() {
     ? budget.expenseLimits.reduce((sum, t) => sum + t.actual, 0)
     : 0;
 
+  // Gastos libres: expense entries del mes que NO coinciden con ningún budget limit por nombre
+  const budgetLimitNames = budget
+    ? new Set(budget.expenseLimits.map((l) => l.name))
+    : new Set<string>();
+  const freeExpenseEntries = expenseEntries.filter(
+    (e) =>
+      e.date >= selectedMonthStart &&
+      e.date < selectedMonthEnd &&
+      !budgetLimitNames.has(e.description)
+  );
+  const freeExpensesThisMonth = freeExpenseEntries.reduce((sum, e) => sum + e.amount, 0);
+
   // Deduct CC-covered fixed expenses from CC total to avoid double-counting
   const ccCoveredByFixed = budget
     ? budget.expenseLimits
@@ -157,7 +169,7 @@ export function BudgetTab() {
     : 0;
   const netCCSpending = Math.max(totalCCSpending - ccCoveredByFixed, 0);
 
-  const totalAllExpenses = totalActualExpenses + debtPaymentsThisMonth + netCCSpending;
+  const totalAllExpenses = totalActualExpenses + freeExpensesThisMonth + debtPaymentsThisMonth + netCCSpending;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -192,6 +204,7 @@ export function BudgetTab() {
             totalBudgetedExpenses={totalBudgetedExpenses}
             totalAllExpenses={totalAllExpenses}
             totalActualExpenses={totalActualExpenses}
+            freeExpensesThisMonth={freeExpensesThisMonth}
             debtPaymentsThisMonth={debtPaymentsThisMonth}
             totalCCSpending={netCCSpending}
           />
@@ -288,6 +301,11 @@ export function BudgetTab() {
             }}
           />
 
+          {/* Gastos libres (no vinculados a ningún ítem del presupuesto) */}
+          {freeExpenseEntries.length > 0 && (
+            <FreeExpensesSection entries={freeExpenseEntries} />
+          )}
+
           {/* Credit card payment status */}
           <CCPaymentStatusSection
             creditCards={creditCards}
@@ -379,6 +397,7 @@ function BudgetOverview({
   totalBudgetedExpenses,
   totalAllExpenses,
   totalActualExpenses,
+  freeExpensesThisMonth,
   debtPaymentsThisMonth,
   totalCCSpending,
 }: {
@@ -387,6 +406,7 @@ function BudgetOverview({
   totalBudgetedExpenses: number;
   totalAllExpenses: number;
   totalActualExpenses: number;
+  freeExpensesThisMonth: number;
   debtPaymentsThisMonth: number;
   totalCCSpending: number;
 }) {
@@ -401,6 +421,7 @@ function BudgetOverview({
   // Stacked bar
   const barTotal = totalAllExpenses || 1;
   const fixedPct = (totalActualExpenses / barTotal) * 100;
+  const freePct = (freeExpensesThisMonth / barTotal) * 100;
   const loanPct = (debtPaymentsThisMonth / barTotal) * 100;
   const ccPct = (totalCCSpending / barTotal) * 100;
 
@@ -471,22 +492,16 @@ function BudgetOverview({
           </p>
           <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
             {totalActualExpenses > 0 && (
-              <div
-                className="bg-amber-400"
-                style={{ width: `${fixedPct}%` }}
-              />
+              <div className="bg-amber-400" style={{ width: `${fixedPct}%` }} />
+            )}
+            {freeExpensesThisMonth > 0 && (
+              <div className="bg-orange-400" style={{ width: `${freePct}%` }} />
             )}
             {debtPaymentsThisMonth > 0 && (
-              <div
-                className="bg-rose-400"
-                style={{ width: `${loanPct}%` }}
-              />
+              <div className="bg-rose-400" style={{ width: `${loanPct}%` }} />
             )}
             {totalCCSpending > 0 && (
-              <div
-                className="bg-violet-400"
-                style={{ width: `${ccPct}%` }}
-              />
+              <div className="bg-violet-400" style={{ width: `${ccPct}%` }} />
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
@@ -495,6 +510,14 @@ function BudgetOverview({
                 <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                 <span className="text-[10px] text-surface-500">
                   Fijos {formatMoney(totalActualExpenses)}
+                </span>
+              </div>
+            )}
+            {freeExpensesThisMonth > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
+                <span className="text-[10px] text-surface-500">
+                  Libres {formatMoney(freeExpensesThisMonth)}
                 </span>
               </div>
             )}
@@ -517,6 +540,31 @@ function BudgetOverview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Free Expenses ────────────────────────────────────────────────────────────
+
+function FreeExpensesSection({ entries }: { entries: ExpenseEntry[] }) {
+  const total = entries.reduce((sum, e) => sum + e.amount, 0);
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="p-4 border-b border-surface-300/30">
+        <h3 className="section-title">Gastos libres</h3>
+        <p className="text-xs text-surface-500 mt-0.5">{formatMoney(total)} en gastos no presupuestados</p>
+      </div>
+      <div className="divide-y divide-surface-200/50">
+        {entries.map((e) => (
+          <div key={e.id} className="px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-surface-900">{e.description}</p>
+              <p className="text-xs text-surface-500">{e.category} · {e.date}</p>
+            </div>
+            <p className="font-mono text-sm font-medium text-accent-rose">-{formatMoney(e.amount)}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
